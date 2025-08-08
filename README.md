@@ -137,7 +137,7 @@ Though we could optimize by collapse `apple/pie` and merge the `/` and `/apple` 
 
 Combining these 3 sections we get the following document:
 
-```json
+```jsonc
 // Config
 {"schema":"redirects-v1","bloom":true,"trie":true,"status":308,"normalize":true}
 // Bloom Filter
@@ -152,7 +152,7 @@ Combining these 3 sections we get the following document:
 
 If we opted out of the bloom filter (because it's silly for such a tiny document), it would look like:
 
-```json
+```jsonc
 // Config
 {"schema":"redirects-v1","trie":true,"status":308,"normalize":true}
 // Prefix Trie
