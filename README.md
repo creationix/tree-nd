@@ -83,7 +83,7 @@ Each node is an array of alternating path segments and pointers.  Negative point
 
 The example document from before would be encoded like this (excluding the comments)
 
-```json
+```jsonc
 ["/foo/bar.html",307]     // LEAF: /foo/bar
 "/foo.html"               // LEAF: /foo
 [12,"/bar",34]            // NODE: /foo (both a leaf and node)
@@ -94,7 +94,7 @@ And we're done!  Since the bloom filter option was used, we don't encode the ent
 
 But if there was no bloom filter, it would encode all entries like this:
 
-```json
+```jsonc
 ["/foo/bar.html",307]     // LEAF: /foo/bar
 ["r",22,"z/",0]           // NODE: /foo/ba (null is encoded as offset 0)
 "/foo.html"               // LEAF: /foo
@@ -118,7 +118,7 @@ Let's go back and change our config to not use a bloom filter and to split the t
 
 The resulting prefix trie:
 
-```json
+```jsonc
 ["/foo/bar.html",307]     // LEAF: /foo/bar
 "/foo.html"               // LEAF: /foo
 [12,"bar",34,"baz",0]     // NODE: /foo
