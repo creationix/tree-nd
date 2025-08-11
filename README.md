@@ -1,6 +1,19 @@
-# Newline Delimited JSON Huge Map
+# PathMap: Optimized Storage for Large Key-Value Datasets
 
-This is a format that is a compromise between maximum machine effeciency and maximum human readability/debugability.  Because large production systems need both.
+PathMap is a file format designed for applications that need to store and query millions of small key-value mappings efficiently while maintaining human debuggability. 
+
+**Use PathMap when you have:**
+- 100K+ URL paths, API routes, or similar string keys
+- Small, often similar payloads (configs, redirects, metadata)
+- Need for both fast machine queries AND human inspection
+- Memory/storage constraints
+
+**Common use cases:**
+- CDN redirect configurations (millions of URL mappings)
+- API routing tables
+- Feature flags by URL pattern  
+- Static site generators with large datasets
+- Microservice configuration maps
 
 ## Semantics
 
