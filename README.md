@@ -15,6 +15,17 @@ PathMap is a file format designed for applications that need to store and query 
 - Static site generators with large datasets
 - Microservice configuration maps
 
+## Implementations
+
+| Language | Package | Status |
+|----------|---------|--------|
+| **TypeScript/JavaScript** | `npm install pathmap` | ✅ Ready |
+| **Lua/LuaJIT** | `luarocks install pathmap` | ✅ Ready |
+| WebAssembly | *planned* | 📋 |
+| Zig | *planned* | 📋 |
+| Go | *planned* | 📋 |
+| Rust | *planned* | 📋 |
+
 ## Semantics
 
 This is able to encode a dataset that is a large number of keys (usually URL paths) mapping to many small payloads of arbitrary JSON data.
