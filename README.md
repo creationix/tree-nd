@@ -76,15 +76,14 @@ The encoded file is newline delimted JSON.  This means it is a text file and can
 The first line in the file is the config line.  It's the `config` value the user provided as plain JSON, except the `bloom` becomes a `true` if set.
 
 ```json
-{"version":"redirects-v1","bloom":true,"trie":true,"status":308,"normalize":true}
+{"version":"redirects-v1","bloom":{"n":4,"p":1e-7,"m":138,"k":23,"s":0},"trie":true,"status":308,"normalize":true}
 ```
 
 ### Bloom Filter Config and Body
 
-If a bloom filter is used, then the second line will be the actual bloom parameters and the third line will be the bloom filter itself.  It will be base64 encoded and wrapped in double quotes so that it is a valid JSON value.  Readers won't actually JSON parse or base64 decode it, they can simply read the bytes directly when doing filter lookups.
+If a bloom filter is used, the bloom filter config will be inline the first line and the second line will be the bloom filter itself.  It will be base64 encoded and wrapped in double quotes so that it is a valid JSON value.  Readers won't actually JSON parse or base64 decode it, they can simply read the bytes directly when doing filter lookups.
 
 ```json
-{"n":4,"p":1e-7,"m":138,"k":23,"s":0}
 "/qqpVeKKgABfaKAFV6qqii/A"
 ```
 
@@ -156,9 +155,8 @@ Combining these 3 sections we get the following document:
 
 ```jsonc
 // Config
-{"version":"redirects-v1","bloom":true,"trie":true,"status":308,"normalize":true}
+{"version":"redirects-v1","bloom":{"n":4,"p":1e-7,"m":138,"k":23,"s":0},"trie":true,"status":308,"normalize":true}
 // Bloom Filter
-{"n":4,"p":1e-7,"m":138,"k":23,"s":0}
 "/qqpVeKKgABfaKAFV6qqii/A"
 // Prefix Trie
 ["/foo/bar.html",307]
