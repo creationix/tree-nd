@@ -31,10 +31,10 @@ For example, consider this tiny sample dataset that we wish to encode:
 
     // global config data that will be passed through to the final doc untouched
     config: {
-        schema: "redirects-v1", // This field is mandatory and must be a string
+        version: "redirects-v1", // This field is mandatory and must be a string
 
         // Optional config field to trigger generation of a bloom filter
-        // If `bloom` is used, it must fit this schema
+        // If `bloom` is used, it must fit this version
         bloom: {
             p: 1e-7 // required false positive probability (1-in-10M false positive rate)
             // `n` is optional and defaults to the number of items in the map
@@ -47,7 +47,7 @@ For example, consider this tiny sample dataset that we wish to encode:
         trie: "/", // if a string, prefixes are split by this string as a delimeter
         trie: true, // If true, then prefixes are split optimally based on the codepoints present
 
-        // Everything else is arbitrary and defined by the schema
+        // Everything else is arbitrary and defined by the version
         status: 308,
         normalize: true
     },
@@ -65,7 +65,7 @@ For example, consider this tiny sample dataset that we wish to encode:
 }
 ```
 
-Notice that the payloads are not uniform in shape and also don't match the defaults.  This is fine, the library consumer is given both the raw payload and the raw defaults object as a result and it can interpret the meaning however it sees fit.  This enables some nice optimizations here.  For example, most redirects will use the default redirect status code and so the only unique information is the new `Location` value for the redirect.  So a simple string represents this just fine in the context of a redirects file (this sample file).  Then in the case of a custom status, we use a simple array instead of an object with two keys.  For paths that are fully default the value can be null.  In this particular configuration `schema: "redirects-v1"`, fully default paths add or remove trailing slashes with a 308 redirect.
+Notice that the payloads are not uniform in shape and also don't match the defaults.  This is fine, the library consumer is given both the raw payload and the raw defaults object as a result and it can interpret the meaning however it sees fit.  This enables some nice optimizations here.  For example, most redirects will use the default redirect status code and so the only unique information is the new `Location` value for the redirect.  So a simple string represents this just fine in the context of a redirects file (this sample file).  Then in the case of a custom status, we use a simple array instead of an object with two keys.  For paths that are fully default the value can be null.  In this particular configuration `version: "redirects-v1"`, fully default paths add or remove trailing slashes with a 308 redirect.
 
 ## Encoding
 
@@ -123,7 +123,7 @@ Sometimes you may want a simpler prefix trie that's segmented on some delimeter.
 Let's go back and change our config to not use a bloom filter and to split the tree on `/`.
 
 ```js
-{ schema: "redirects-v1",
+{ version: "redirects-v1",
   trie: "/",
   status: 308,
   normalize: true }
