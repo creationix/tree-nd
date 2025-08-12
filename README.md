@@ -142,7 +142,7 @@ The resulting prefix trie:
 
 Though we could optimize by collapsing `apple/pie` and merge the `/` and `/apple` nodes into one:
 
-```json
+```jsonc
 ["/foo/bar.html",307]       // LEAF: /foo/bar
 "/foo.html"                 // LEAF: /foo
 [12,"bar",34,"baz",0]       // NODE: /foo
@@ -208,7 +208,7 @@ Double hashing is used to speed up the `k` lookups.
 
 ```c
 uint64_t hash1 = xxhash64(key, s);
-uint64_t hash2 = xxhash64(key, hash1);
+uint64_t hash2 = xxhash64(key, s + 1);
 for (int i = 0; i < k; i++) {
     int bit = (hash1 + i * hash2) % m;
     // ...
