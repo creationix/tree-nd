@@ -192,7 +192,7 @@ The default optimal bit size is the typical formula, but then rounded up to the 
 $$m = \left\lceil \frac{-n \ln(p)}{\ln(2)^2 \cdot 6} \right\rceil \cdot 6$$
 
 ```c
-int m = (int)ceil((-n * log(p)) / (log(2) * log(2) * 6)) * 6;
+int m = (int)ceil((-n * log(p)) / (M_LN2 * M_LN2 * 6)) * 6;
 ```
 
 The default optimal hash count is the normal formula:
