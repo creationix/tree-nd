@@ -76,7 +76,7 @@ The encoded file is newline delimted JSON.  This means it is a text file and can
 The first line in the file is the config line.  It's the `config` value the user provided as plain JSON, except the `bloom` becomes a `true` if set.
 
 ```json
-{"schema":"redirects-v1","bloom":true,"trie":true,"status":308,"normalize":true}
+{"version":"redirects-v1","bloom":true,"trie":true,"status":308,"normalize":true}
 ```
 
 ### Bloom Filter Config and Body
@@ -156,7 +156,7 @@ Combining these 3 sections we get the following document:
 
 ```jsonc
 // Config
-{"schema":"redirects-v1","bloom":true,"trie":true,"status":308,"normalize":true}
+{"version":"redirects-v1","bloom":true,"trie":true,"status":308,"normalize":true}
 // Bloom Filter
 {"n":4,"p":1e-7,"m":138,"k":23,"s":0}
 "/qqpVeKKgABfaKAFV6qqii/A"
@@ -171,7 +171,7 @@ If we opted out of the bloom filter (because it's silly for such a tiny document
 
 ```jsonc
 // Config
-{"schema":"redirects-v1","trie":true,"status":308,"normalize":true}
+{"version":"redirects-v1","trie":true,"status":308,"normalize":true}
 // Prefix Trie
 ["/foo/bar.html",307]
 ["r",22,"z/",0]
