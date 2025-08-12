@@ -174,12 +174,12 @@ For anyone interested in the details, this should help understanding or reimplee
 
 ### Bloom Filter Algorithm
 
-The default optimal bit size is the typical formula, but then rounded up to the nearest multiple of 6 to use all those base64 bits without padding.
+The default optimal bit size is the typical formula, but then rounded up to the nearest multiple of 24 to use all those base64 bits without padding.
 
-$$m = \left\lceil \frac{-n \ln(p)}{\ln(2)^2 \cdot 6} \right\rceil \cdot 6$$
+$$m = \left\lceil \frac{-n \ln(p)}{\ln(2)^2 \cdot 24} \right\rceil \cdot 24$$
 
 ```c
-int m = (int)ceil((-n * log(p)) / (M_LN2 * M_LN2 * 6)) * 6;
+int m = (int)ceil((-n * log(p)) / (M_LN2 * M_LN2 * 24)) * 24;
 ```
 
 The default optimal hash count is the normal formula:
