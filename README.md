@@ -131,23 +131,14 @@ Let's go back and change our config to not use a bloom filter and to split the t
 The resulting prefix trie:
 
 ```jsonc
-["/foo/bar.html",307]     // LEAF: /foo/bar
-"/foo.html"               // LEAF: /foo
-[12,"bar",34,"baz",0]     // NODE: /foo
-["pie",0]                 // NODE: /apple
-["foo",-32,"apple",-10]   // NODE: /
-[-24]                     // ROOT NODE
-```
-
-Though we could optimize by collapsing `apple/pie` and merge the `/` and `/apple` nodes into one:
-
-```jsonc
 ["/foo/bar.html",307]       // LEAF: /foo/bar
 "/foo.html"                 // LEAF: /foo
 [12,"bar",34,"baz",0]       // NODE: /foo
 ["foo",-22,"apple","pie",0] // NODE: /
 [-28]                       // ROOT NODE
 ```
+
+Note that the `"apple"` and `"pie"` segments were merged to simplify the trie.
 
 ### Final Sample Document
 
