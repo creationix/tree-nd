@@ -140,10 +140,14 @@ The resulting prefix trie:
 [-24]                     // ROOT NODE
 ```
 
-Though we could optimize by collapse `apple/pie` and merge the `/` and `/apple` nodes into one:
+Though we could optimize by collapsing `apple/pie` and merge the `/` and `/apple` nodes into one:
 
 ```json
-["foo",-23,"apple","pie",0]
+["/foo/bar.html",307]       // LEAF: /foo/bar
+"/foo.html"                 // LEAF: /foo
+[12,"bar",34,"baz",0]       // NODE: /foo
+["foo",-22,"apple","pie",0] // NODE: /
+[-28]                       // ROOT NODE
 ```
 
 ### Final Sample Document
