@@ -115,31 +115,6 @@ But if there was no bloom filter, it would encode all entries like this:
 ["/",-26]                 // ROOT NODE: largest common prefix was "/"
 ```
 
-### Segmented Prefix Trie
-
-Sometimes you may want a simpler prefix trie that's segmented on some delimeter.
-
-Let's go back and change our config to not use a bloom filter and to split the tree on `/`.
-
-```js
-{ version: "redirects-v1",
-  trie: "/",
-  status: 308,
-  normalize: true }
-```
-
-The resulting prefix trie:
-
-```jsonc
-["/foo/bar.html",307]       // LEAF: /foo/bar
-"/foo.html"                 // LEAF: /foo
-[12,"bar",34,"baz",0]       // NODE: /foo
-["foo",-22,"apple","pie",0] // NODE: /
-[-28]                       // ROOT NODE
-```
-
-Note that the `"apple"` and `"pie"` segments were merged to simplify the trie.
-
 ### Final Sample Document
 
 Combining these 3 sections we get the following document:
@@ -170,6 +145,30 @@ If we opted out of the bloom filter (because it's silly for such a tiny document
 ["/",-26]
 ```
 
+### Segmented Prefix Trie
+
+Sometimes you may want a simpler prefix trie that's segmented on some delimeter.
+
+Let's go back and change our config to not use a bloom filter and to split the tree on `/`.
+
+```js
+{ version: "redirects-v1",
+  trie: "/",
+  status: 308,
+  normalize: true }
+```
+
+The resulting prefix trie:
+
+```jsonc
+["/foo/bar.html",307]       // LEAF: /foo/bar
+"/foo.html"                 // LEAF: /foo
+[12,"bar",34,"baz",0]       // NODE: /foo
+["foo",-22,"apple","pie",0] // NODE: /
+[-28]                       // ROOT NODE
+```
+
+Note that the `"apple"` and `"pie"` segments were merged to simplify the trie.
 ## Algorithms
 
 For anyone interested in the details, this should help understanding or reimpleenting this format.
