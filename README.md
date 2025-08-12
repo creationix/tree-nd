@@ -165,7 +165,6 @@ The resulting prefix trie:
 "/foo.html"                 // LEAF: /foo
 [12,"bar",34,"baz",0]       // NODE: /foo
 ["foo",-22,"apple","pie",0] // NODE: /
-[-28]                       // ROOT NODE
 ```
 
 Note that the `"apple"` and `"pie"` segments were merged to simplify the trie.
