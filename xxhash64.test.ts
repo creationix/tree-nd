@@ -42,3 +42,23 @@ for (const [input, seed, h64] of tests) {
 function utf8(arr: TemplateStringsArray): Uint8Array {
   return new TextEncoder().encode(arr[0]);
 }
+
+const seedCount = 1024
+const stringCount = 1024
+console.log(`\nFuzz testing with ${seedCount} seeds and ${stringCount} unique inputs comparing with bun`)
+for (let len = 0; len < stringCount; len++) {
+  const input = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    input[i] = Math.floor(Math.random() * 256);
+  }
+  process.stdout.write('.')
+  for (let seed = 0n; seed < seedCount; seed++) {
+    const expectedHash = Bun.hash.xxHash64(input, seed);
+    const actualHash = xxh64(input, seed);
+    // console.log(`seed: ${seed}, len: ${len}, expected: ${expectedHash.toString(16)}, actual: ${actualHash.toString(16)}`);
+    if (actualHash !== expectedHash) {
+      throw new Error(`HASH MISMATCH for seed ${seed} and length ${len}`);
+    }
+  }
+}
+console.log('\nAll tests passed successfully!');

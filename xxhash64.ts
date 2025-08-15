@@ -8,11 +8,7 @@ const PRIME64_4 = 0x85ebca77c2b2ae63n;
 const PRIME64_5 = 0x27d4eb2f165667c5n;
 const U64_MASK = 0xffffffffffffffffn;
 
-// Use bun's built-in xxhash if it is available.
-// Otherwise use the implementation in this file.
-export const xxh64 = globalThis?.Bun?.hash?.xxHash64 || xxh64JS;
-
-function xxh64JS(data: ArrayBufferView, seed: bigint): bigint {
+export function xxh64(data: ArrayBufferView, seed: bigint): bigint {
   let ptr = 0;
   const len = data.byteLength;
   const last = ptr + len;
@@ -111,29 +107,14 @@ function rotl64(num: bigint, bits: bigint): bigint {
   return ((num << bits) | (num >> (64n - bits))) & U64_MASK;
 }
 
-/**
- * @param {bigint} a
- * @param {bigint} b
- * @returns {bigint}
- */
-function imul64(a, b) {
+function imul64(a: bigint, b: bigint): bigint {
   return (a * b) & U64_MASK;
 }
 
-/**
- * @param {bigint} a
- * @param {bigint} b
- * @returns {bigint}
- */
-function iadd64(a, b) {
+function iadd64(a: bigint, b: bigint): bigint {
   return (a + b) & U64_MASK;
 }
 
-/**
- * @param {bigint} a
- * @param {bigint} b
- * @returns {bigint}
- */
-function isub64(a, b) {
+function isub64(a: bigint, b: bigint): bigint {
   return (a - b) & U64_MASK;
 }
