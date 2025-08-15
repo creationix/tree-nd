@@ -57,7 +57,7 @@ for (let len = 0; len < stringCount; len++) {
   crypto.getRandomValues(input);
   process.stdout.write('.')
   for (let s = 0; s < seedCount; s++) {
-    const seed = seeds[s] & 0xfffffffffn;
+    const seed = seeds[s];
     const expectedHash = Bun.hash.xxHash64(input, seed);
     const expectedHash2 = xxhash.xxh64(input, seed);
     const actualHash = xxh64(input, seed);
