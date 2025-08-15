@@ -104,7 +104,7 @@ function merge_round64(initial: bigint, val: bigint): bigint {
 
 // Rotate left modulo 64-bit
 function rotl64(num: bigint, bits: bigint): bigint {
-  return BigInt.asUintN(64, (num << bits) | (num >> (64n - bits)));
+  return BigInt.asUintN(64, (num << bits)) | (num >> (64n - bits));
 }
 
 function imul64(a: bigint, b: bigint): bigint {
