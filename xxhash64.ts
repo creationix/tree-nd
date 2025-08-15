@@ -31,13 +31,13 @@ export function xxh64(data: ArrayBufferView, seed: bigint): bigint {
     } while (ptr <= limit);
 
     // Convergence
-    h64 = BigInt.asUintN(64,
+    h64 = BigInt.asUintN(
+      64,
       rotl64(acc1, 1n) +
       rotl64(acc2, 7n) +
       rotl64(acc3, 12n) +
-      rotl64(acc4, 18n)
+      rotl64(acc4, 18n),
     );
-
 
     h64 = merge_round64(h64, acc1);
     h64 = merge_round64(h64, acc2);
@@ -108,13 +108,13 @@ function rotl64(num: bigint, bits: bigint): bigint {
 }
 
 function imul64(a: bigint, b: bigint): bigint {
-  return BigInt.asUintN(64, (a * b));
+  return BigInt.asUintN(64, a * b);
 }
 
 function iadd64(a: bigint, b: bigint): bigint {
-  return BigInt.asUintN(64, (a + b));
+  return BigInt.asUintN(64, a + b);
 }
 
 function isub64(a: bigint, b: bigint): bigint {
-  return BigInt.asUintN(64, (a - b));
+  return BigInt.asUintN(64, a - b);
 }

@@ -43,19 +43,21 @@ function utf8(arr: TemplateStringsArray): Uint8Array {
   return new TextEncoder().encode(arr[0]);
 }
 
-const xxhash = require('@node-rs/xxhash')
+const xxhash = require('@node-rs/xxhash');
 
-const seedCount = 1024
-const stringCount = 1024
+const seedCount = 1024;
+const stringCount = 1024;
 const seedData = new Uint8Array(seedCount * 8);
 crypto.getRandomValues(seedData);
 const seeds = new BigUint64Array(seedData.buffer);
 
-console.log(`\nFuzz testing with ${seedCount} seeds and ${stringCount} unique length inputs comparing with bun and @node-rs/xxhash`)
+console.log(
+  `\nFuzz testing with ${seedCount} seeds and ${stringCount} unique length inputs comparing with bun and @node-rs/xxhash`,
+);
 for (let len = 0; len < stringCount; len++) {
   const input = new Uint8Array(len);
   crypto.getRandomValues(input);
-  process.stdout.write('.')
+  process.stdout.write('.');
   for (let s = 0; s < seedCount; s++) {
     const seed = seeds[s];
     const expectedHash = Bun.hash.xxHash64(input, seed);
@@ -68,7 +70,7 @@ for (let len = 0; len < stringCount; len++) {
         expectedHash: expectedHash.toString(16),
         expectedHash2: expectedHash2.toString(16),
         actualHash: actualHash.toString(16),
-      })
+      });
       throw new Error(`HASH MISMATCH for seed ${seed} and length ${len}`);
     }
     // Uncomment to show Bun failures
