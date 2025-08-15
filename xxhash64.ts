@@ -6,7 +6,6 @@ const PRIME64_2 = 0xc2b2ae3d27d4eb4fn;
 const PRIME64_3 = 0x165667b19e3779f9n;
 const PRIME64_4 = 0x85ebca77c2b2ae63n;
 const PRIME64_5 = 0x27d4eb2f165667c5n;
-const U64_MASK = 0xffffffffffffffffn;
 
 export function xxh64(data: ArrayBufferView, seed: bigint): bigint {
   let ptr = 0;
@@ -16,10 +15,10 @@ export function xxh64(data: ArrayBufferView, seed: bigint): bigint {
 
   let h64 = 0n;
   if (len >= 32) {
-    let acc1 = (seed + PRIME64_1 + PRIME64_2) & U64_MASK;
-    let acc2 = iadd64(seed, PRIME64_2);
-    let acc3 = seed & U64_MASK;
-    let acc4 = isub64(seed, PRIME64_1);
+    let acc1 = BigInt.asUintN(64, seed + PRIME64_1 + PRIME64_2);
+    let acc2 = BigInt.asUintN(64, iadd64(seed, PRIME64_2));
+    let acc3 = BigInt.asUintN(64, seed);
+    let acc4 = BigInt.asUintN(64, isub64(seed, PRIME64_1));
 
     // For every chunk of 4 words, so 4 * 64bits = 32 bytes
     const limit = last - 32;
@@ -32,12 +31,13 @@ export function xxh64(data: ArrayBufferView, seed: bigint): bigint {
     } while (ptr <= limit);
 
     // Convergence
-    h64 =
-      (rotl64(acc1, 1n) +
-        rotl64(acc2, 7n) +
-        rotl64(acc3, 12n) +
-        rotl64(acc4, 18n)) &
-      U64_MASK;
+    h64 = BigInt.asUintN(64,
+      rotl64(acc1, 1n) +
+      rotl64(acc2, 7n) +
+      rotl64(acc3, 12n) +
+      rotl64(acc4, 18n)
+    );
+
 
     h64 = merge_round64(h64, acc1);
     h64 = merge_round64(h64, acc2);
@@ -104,17 +104,17 @@ function merge_round64(initial: bigint, val: bigint): bigint {
 
 // Rotate left modulo 64-bit
 function rotl64(num: bigint, bits: bigint): bigint {
-  return ((num << bits) | (num >> (64n - bits))) & U64_MASK;
+  return BigInt.asUintN(64, (num << bits) | (num >> (64n - bits)));
 }
 
 function imul64(a: bigint, b: bigint): bigint {
-  return (a * b) & U64_MASK;
+  return BigInt.asUintN(64, (a * b));
 }
 
 function iadd64(a: bigint, b: bigint): bigint {
-  return (a + b) & U64_MASK;
+  return BigInt.asUintN(64, (a + b));
 }
 
 function isub64(a: bigint, b: bigint): bigint {
-  return (a - b) & U64_MASK;
+  return BigInt.asUintN(64, (a - b));
 }
