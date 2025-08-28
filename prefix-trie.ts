@@ -13,6 +13,13 @@ type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue };
 
+type StringifyLine = (
+  | string
+  | 0
+  | { leafOffset: number }
+  | { childOffset: number }
+)[];
+
 class PrefixTrie {
   private separator: string;
   private root: TrieNode;
@@ -58,30 +65,28 @@ class PrefixTrie {
     const lines: string[] = [];
     const seenLines: Record<string, number> = {};
     walk(root[''], '');
-    return lines.join('');
+    return lines.reverse().join('');
 
-    function push(str: string, lengthOverride?: number): number {
+    function push(str: string): number {
       const seenIndex = seenLines[str];
       if (seenIndex !== undefined) {
         return seenIndex;
       }
-      const pos = offset;
-      seenLines[str] = pos;
-      offset += lengthOverride ?? new TextEncoder().encode(str).length + 1;
+      offset += new TextEncoder().encode(str).length + 1;
       lines.push(`${str}\n`);
-      return pos;
+      seenLines[str] = offset;
+      return offset;
     }
 
     function walk(node: TrieNode, path: string, skipLeaf = false): number {
-      const line: (string | number)[] = [];
+      const line: StringifyLine = [];
       if (!skipLeaf) {
         const leaf = getLeafOnly(node);
         if (leaf !== undefined) {
+          line.push({ leafOffset: push(JSON.stringify(leaf)) });
           if (debug) {
-            push(green(`LEAF: ${path}`), 0);
+            push(`# ${green(`LEAF: ${path}`)}`);
           }
-          const leafOffset = push(JSON.stringify(leaf));
-          line.push(offset - leafOffset);
         }
       }
       for (const key of Object.keys(node).sort()) {
@@ -89,6 +94,7 @@ class PrefixTrie {
         line.push(key);
         let subpath = path + separator + key;
         let segment: string | undefined;
+        // biome-ignore lint/suspicious/noAssignInExpressions: it's fine, really
         while ((segment = getSingleSegment(child)) !== undefined) {
           line.push(segment);
           subpath += separator + segment;
@@ -98,37 +104,25 @@ class PrefixTrie {
         if (leaf === null) {
           line.push(0);
         } else if (leaf !== undefined) {
+          line.push({ leafOffset: push(JSON.stringify(leaf)) });
           if (debug) {
-            push(green(`LEAF: ${subpath}`), 0);
+            push(`# ${green(`LEAF: ${subpath}`)}`);
           }
-          const leafOffset = push(JSON.stringify(leaf));
-          line.push(offset - leafOffset);
         } else {
-          const childOffset = walk(child, subpath);
-          line.push(-(offset - childOffset));
+          line.push({ childOffset: walk(child, subpath) });
         }
       }
+      const pos = push(compactEncode(line, offset));
       if (debug) {
-        push(path ? yellow(`NODE: ${path}`) : red('ROOT:'), 0);
+        push(`# ${path ? yellow(`NODE: ${path}`) : red('ROOT:')}`);
       }
-      return push(compactEncode(line));
+      return pos;
     }
   }
 }
 
-const b64Digits =
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-
-// Url Safe Base64 digits, but normal integer.
-//   A-Z a-z 0-9 - _
-function b64Encode(num: number): string {
-  if (!Number.isInteger(num)) throw new TypeError(`${num} is not an integer.`);
-  const digits: string[] = [];
-  while (num > 0) {
-    digits.push(b64Digits[num & 63]);
-    num >>>= 6;
-  }
-  return digits.reverse().join('');
+function b36Encode(val: number): string {
+  return val ? val.toString(36) : '';
 }
 
 // A custom serilization for prefix nodes that is cheaper than JSON
@@ -137,18 +131,18 @@ function b64Encode(num: number): string {
 // Leaf pointers are `>${base_36_dist}
 // Node pointers are `<${base_36_dist}
 // Null Leaves are tab characters `!`
-function compactEncode(val: unknown[]): string {
+function compactEncode(val: StringifyLine, offset: number): string {
   return val
     .map((item) => {
       if (typeof item === 'string') {
         return `/${item.replace(/[\\/<>!]/g, (c) => `\\${c}`)}`;
       }
-      if (typeof item === 'number') {
-        if (Number.isInteger(item)) {
-          if (item === 0) return '!';
-          if (item < 0) return `<${b64Encode(-item)}`;
-          return `>${b64Encode(item)}`;
-        }
+      if (item === 0) return '!';
+      if ('leafOffset' in item) {
+        return `>${b36Encode(offset - item.leafOffset)}`;
+      }
+      if ('childOffset' in item) {
+        return `<${b36Encode(offset - item.childOffset)}`;
       }
       throw new TypeError(`Invalid value: ${val}`);
     })
@@ -187,7 +181,18 @@ trie.bulkInsert({
   '/apple/pie': { yummy: true },
 });
 
-console.log(trie.stringify(true));
+console.log(trie.stringify());
+
+const trie3 = new PrefixTrie();
+trie3.bulkInsert({
+  '/women/trousers/yoga-pants/black': null,
+  '/women/trousers/yoga-pants/blue': null,
+  '/women/trousers/yoga-pants/brown': null,
+  '/women/trousers/zip-off-trousers/blue': null,
+  '/women/trousers/zip-off-trousers/black': null,
+  '/women/trousers/zip-off-trousers/brown': null,
+});
+console.log(trie3.stringify());
 
 /*
 "/foo.html"                    LEAF: /foo
@@ -206,3 +211,10 @@ for (const path of data) {
   trie2.insert(path, null);
 }
 writeFileSync('./hof-prd-product-list-page-paths.pmap', trie2.stringify(false));
+
+/*
+/apple/pie<w/foo<
+48 /bar>/baz/!
+36 ["/foo/bar.html",307]
+14 {"yummy":true}
+*/
