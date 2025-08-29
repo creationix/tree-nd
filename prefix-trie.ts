@@ -29,9 +29,12 @@ class PrefixTrie {
   }
 
   bulkInsert(entries: Record<string, JSONValue>): void {
+    console.log('\nINPUT:');
+    console.log(entries);
     for (const [key, value] of Object.entries(entries)) {
       this.insert(key, value);
     }
+    console.log('\nOUTPUT:');
   }
 
   insert(key: string, value: JSONValue): void {
@@ -72,21 +75,21 @@ class PrefixTrie {
       if (seenIndex !== undefined) {
         return seenIndex;
       }
-      offset += new TextEncoder().encode(str).length + 1;
+      offset +=
+        str[0] === '\x1b' ? 0 : new TextEncoder().encode(str).length + 1;
       lines.push(`${str}\n`);
       seenLines[str] = offset;
       return offset;
     }
 
-    function walk(node: TrieNode, path: string, skipLeaf = false): number {
+    function walk(node: TrieNode, path: string): number {
+      // console.log({ path, node });
       const line: StringifyLine = [];
-      if (!skipLeaf) {
-        const leaf = getLeafOnly(node);
-        if (leaf !== undefined) {
-          line.push({ leafOffset: push(JSON.stringify(leaf)) });
-          if (debug) {
-            push(`# ${green(`LEAF: ${path}`)}`);
-          }
+      const leaf = node[VALUE];
+      if (leaf !== undefined) {
+        line.push({ leafOffset: push(JSON.stringify(leaf)) });
+        if (debug) {
+          push(green(`LEAF: ${path}`));
         }
       }
       for (const key of Object.keys(node).sort()) {
@@ -106,7 +109,7 @@ class PrefixTrie {
         } else if (leaf !== undefined) {
           line.push({ leafOffset: push(JSON.stringify(leaf)) });
           if (debug) {
-            push(`# ${green(`LEAF: ${subpath}`)}`);
+            push(green(`LEAF: ${subpath}`));
           }
         } else {
           line.push({ childOffset: walk(child, subpath) });
@@ -114,7 +117,7 @@ class PrefixTrie {
       }
       const pos = push(compactEncode(line, offset));
       if (debug) {
-        push(`# ${path ? yellow(`NODE: ${path}`) : red('ROOT:')}`);
+        push(path ? yellow(`NODE: ${path}`) : red('ROOT:'));
       }
       return pos;
     }
@@ -139,10 +142,10 @@ function compactEncode(val: StringifyLine, offset: number): string {
       }
       if (item === 0) return '!';
       if ('leafOffset' in item) {
-        return `>${b36Encode(offset - item.leafOffset)}`;
+        return `>${b36Encode(item.leafOffset)}`;
       }
       if ('childOffset' in item) {
-        return `<${b36Encode(offset - item.childOffset)}`;
+        return `<${b36Encode(item.childOffset)}`;
       }
       throw new TypeError(`Invalid value: ${val}`);
     })
@@ -173,26 +176,32 @@ function getSingleSegment(node: TrieNode): string | undefined {
   }
 }
 
-const trie = new PrefixTrie();
-trie.bulkInsert({
-  '/foo': '/foo.html',
-  '/foo/bar': ['/foo/bar.html', 307],
-  '/foo/baz/': null,
-  '/apple/pie': { yummy: true },
-});
+// const trie = new PrefixTrie();
+// trie.bulkInsert({
+//   '/foo': '/foo.html',
+//   '/foo/bar': ['/foo/bar.html', 307],
+//   '/foo/baz/': null,
+//   '/apple/pie': { yummy: true },
+// });
 
-console.log(trie.stringify());
+// console.log(trie.stringify(true));
 
 const trie3 = new PrefixTrie();
 trie3.bulkInsert({
-  '/women/trousers/yoga-pants/black': null,
-  '/women/trousers/yoga-pants/blue': null,
-  '/women/trousers/yoga-pants/brown': null,
-  '/women/trousers/zip-off-trousers/blue': null,
-  '/women/trousers/zip-off-trousers/black': null,
-  '/women/trousers/zip-off-trousers/brown': null,
+  '': 0,
+  '/': 1,
+  '/f': 2,
+  '/fo': 3,
+  '/foo': 4,
+  '/foo/': 5,
+  // '/women/trousers/yoga-pants/black': 1,
+  // '/women/trousers/yoga-pants/blue': 2,
+  // '/women/trousers/yoga-pants/brown': 3,
+  // '/women/trousers/zip-off-trousers/blue': 4,
+  // '/women/trousers/zip-off-trousers/black': 5,
+  // '/women/trousers/zip-off-trousers/brown': 6,
 });
-console.log(trie3.stringify());
+console.log(trie3.stringify(true));
 
 /*
 "/foo.html"                    LEAF: /foo
