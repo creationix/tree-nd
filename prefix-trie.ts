@@ -20,7 +20,7 @@ type StringifyLine = (
   | { childOffset: number }
 )[];
 
-class PrefixTrie {
+export class PrefixTrie {
   private separator: string;
   private root: TrieNode;
   constructor(separator = '/') {
@@ -29,18 +29,20 @@ class PrefixTrie {
   }
 
   bulkInsert(entries: Record<string, JSONValue>): void {
-    console.log('\nINPUT:');
-    console.log(entries);
     for (const [key, value] of Object.entries(entries)) {
       this.insert(key, value);
     }
-    console.log('\nOUTPUT:');
   }
 
   insert(key: string, value: JSONValue): void {
     const parts = key.split(this.separator);
+    // Inject leading slash if missing
+    if (parts[0] !== '') {
+      parts.unshift('');
+    }
     let current = this.root;
-    for (const part of parts) {
+    for (const partRaw of parts) {
+      const part = decodeURIComponent(partRaw);
       if (!current[part]) {
         current[part] = {};
       }
@@ -51,6 +53,9 @@ class PrefixTrie {
 
   find(key: string): JSONValue | undefined {
     const parts = key.split(this.separator);
+    if (parts[0] !== '') {
+      parts.unshift('');
+    }
     let current = this.root;
     for (const part of parts) {
       if (!current[part]) {
@@ -67,6 +72,7 @@ class PrefixTrie {
     let offset = 0;
     const lines: string[] = [];
     const seenLines: Record<string, number> = {};
+    console.log(root);
     walk(root[''], '');
     return lines.reverse().join('');
 
@@ -83,24 +89,27 @@ class PrefixTrie {
     }
 
     function walk(node: TrieNode, path: string): number {
-      // console.log({ path, node });
       const line: StringifyLine = [];
       const leaf = node[VALUE];
       if (leaf !== undefined) {
-        line.push({ leafOffset: push(JSON.stringify(leaf)) });
-        if (debug) {
-          push(green(`LEAF: ${path}`));
+        if (leaf === null) {
+          line.push(0);
+        } else {
+          line.push({ leafOffset: push(JSON.stringify(leaf)) });
+          if (debug) {
+            push(green(`LEAF: ${path}`));
+          }
         }
       }
       for (const key of Object.keys(node).sort()) {
         let child = node[key];
         line.push(key);
-        let subpath = path + separator + key;
+        let subpath = path + separator + escapeSlash(key);
         let segment: string | undefined;
         // biome-ignore lint/suspicious/noAssignInExpressions: it's fine, really
         while ((segment = getSingleSegment(child)) !== undefined) {
           line.push(segment);
-          subpath += separator + segment;
+          subpath += separator + escapeSlash(segment);
           child = child[segment];
         }
         const leaf = getLeafOnly(child);
@@ -142,10 +151,10 @@ function compactEncode(val: StringifyLine, offset: number): string {
       }
       if (item === 0) return '!';
       if ('leafOffset' in item) {
-        return `>${b36Encode(item.leafOffset)}`;
+        return `>${b36Encode(offset - item.leafOffset)}`;
       }
       if ('childOffset' in item) {
-        return `<${b36Encode(item.childOffset)}`;
+        return `<${b36Encode(offset - item.childOffset)}`;
       }
       throw new TypeError(`Invalid value: ${val}`);
     })
@@ -176,54 +185,8 @@ function getSingleSegment(node: TrieNode): string | undefined {
   }
 }
 
-// const trie = new PrefixTrie();
-// trie.bulkInsert({
-//   '/foo': '/foo.html',
-//   '/foo/bar': ['/foo/bar.html', 307],
-//   '/foo/baz/': null,
-//   '/apple/pie': { yummy: true },
-// });
-
-// console.log(trie.stringify(true));
-
-const trie3 = new PrefixTrie();
-trie3.bulkInsert({
-  '': 0,
-  '/': 1,
-  '/f': 2,
-  '/fo': 3,
-  '/foo': 4,
-  '/foo/': 5,
-  // '/women/trousers/yoga-pants/black': 1,
-  // '/women/trousers/yoga-pants/blue': 2,
-  // '/women/trousers/yoga-pants/brown': 3,
-  // '/women/trousers/zip-off-trousers/blue': 4,
-  // '/women/trousers/zip-off-trousers/black': 5,
-  // '/women/trousers/zip-off-trousers/brown': 6,
-});
-console.log(trie3.stringify(true));
-
-/*
-"/foo.html"                    LEAF: /foo
-["/foo/bar.html",307]          LEAF: /foo/bar
-[12,"bar",22,"baz","",0]       NODE: /foo
-{"yummy":true}                 LEAF: /apple/pie
-["foo",-25,"apple","pie",15]   ROOT:
-*/
-
-import { readFileSync, writeFileSync } from 'node:fs';
-const trie2 = new PrefixTrie();
-const data = JSON.parse(
-  readFileSync('./hof-prd-product-list-page-paths.json', 'utf8'),
-);
-for (const path of data) {
-  trie2.insert(path, null);
+// Reduced form of encodeURIComponent that only escapes `/`
+// Used for debugging paths
+function escapeSlash(segment: string): string {
+  return segment.replace(/\//g, '%2f');
 }
-writeFileSync('./hof-prd-product-list-page-paths.pmap', trie2.stringify(false));
-
-/*
-/apple/pie<w/foo<
-48 /bar>/baz/!
-36 ["/foo/bar.html",307]
-14 {"yummy":true}
-*/
