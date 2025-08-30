@@ -13,18 +13,185 @@ type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue };
 
-type StringifyLine = (
-  | string
-  | 0
-  | { leafOffset: number }
-  | { childOffset: number }
-)[];
+function isB36(char: string): boolean {
+  return (char >= '0' && char <= '9') || (char >= 'a' && char <= 'z');
+}
+
+function isTerm(char: string): boolean {
+  return (
+    char === '/' ||
+    char === '<' ||
+    char === '>' ||
+    char === '!' ||
+    char === '\n'
+  );
+}
+
+function identity(char: string): string {
+  return char;
+}
+
+type PathMapEntry = string | null | { leaf: number } | { node: number };
+class PathMapLine extends Array<PathMapEntry> {}
+
+export function encodePathMapLine(line: PathMapLine, offset: number): string {
+  return line
+    .map((item) => {
+      if (typeof item === 'string') {
+        return `/${item.replace(/[\\/<>!]/g, (c) => `\\${c}`)}`;
+      }
+      if (item === null) {
+        return '!';
+      }
+      if ('leaf' in item) {
+        return `>${b36Encode(offset - item.leaf)}`;
+      }
+      if ('node' in item) {
+        return `<${b36Encode(offset - item.node)}`;
+      }
+      throw new TypeError(`Invalid value: ${item}`);
+    })
+    .join('');
+}
+
+export function decodeJsonLine(data: string, offset = 0): JSONValue {
+  const start = offset;
+  const length = data.length;
+  while (offset < length) {
+    if (data[offset] === '\n') {
+      return JSON.parse(data.substring(start, offset));
+    }
+    offset++;
+  }
+  throw new Error('Unexpected EOF');
+}
+
+export function decodePathMapLine(data: string, offset = 0): PathMapLine {
+  const line = new PathMapLine();
+  const length = data.length;
+  while (offset < length) {
+    const char = data[offset];
+    if (char === '\n') {
+      offset++;
+      for (let i = 0, l = line.length; i < l; i++) {
+        const entry = line[i];
+        if (entry && typeof entry === 'object') {
+          if ('leaf' in entry) {
+            entry.leaf += offset;
+          } else if ('node' in entry) {
+            entry.node += offset;
+          }
+        }
+      }
+      return line;
+    }
+    if (char === '/') {
+      offset++;
+      const start = offset;
+      while (offset < length) {
+        const c = data[offset];
+        if (isTerm(c)) {
+          break;
+        }
+        if (c === '\\') {
+          offset += 2;
+        } else {
+          offset++;
+        }
+      }
+      line.push(data.substring(start, offset).replace(/\\(.)/g, identity));
+    } else if (char === '!') {
+      line.push(null);
+      offset++;
+    } else if (char === '<' || char === '>') {
+      offset++;
+      const start = offset;
+      while (isB36(data[offset])) {
+        offset++;
+      }
+      const num =
+        offset === start ? 0 : parseInt(data.substring(start, offset), 36);
+      if (char === '<') {
+        line.push({ node: num });
+      } else {
+        line.push({ leaf: num });
+      }
+    }
+  }
+  throw new Error('Unexpected EOF');
+}
+
+function ensurePathMapLine(node: PathMapLine | JSONValue): PathMapLine {
+  if (node instanceof PathMapLine) return node;
+  throw new Error('Unexpected JSON payload');
+}
+
+function isLeaf(entry: PathMapEntry): entry is { leaf: number } {
+  return Boolean(entry && typeof entry === 'object' && 'leaf' in entry);
+}
+
+export class PrefixTrieReader {
+  private data: string;
+  private parsedLines: Map<number, PathMapLine | JSONValue>;
+
+  constructor(data: string) {
+    this.data = data;
+    this.parsedLines = new Map();
+  }
+
+  find(path: string): JSONValue | undefined {
+    if (path[0] !== '/') {
+      throw new TypeError('Paths must start with /');
+    }
+    const data = this.data;
+    const parsedLines = this.parsedLines;
+
+    let leaf: JSONValue | undefined;
+    let node: PathMapLine = ensurePathMapLine(getLine(0));
+    for (const rawPart of path.substring(1).split('/')) {
+      const part = decodeURIComponent(rawPart);
+      const index = node.indexOf(part);
+      console.log({ part, node, index });
+      if (index < 0) return; // No matching node
+      const next = node[index + 1];
+      if (typeof next === 'string') {
+        // This is where chained path optimization might go
+        throw new Error('Unexpected string');
+      } else if (next === null) {
+        leaf = null;
+        node = [];
+      } else if (isLeaf(next)) {
+        leaf = getLine(next.leaf);
+        node = [];
+      } else if ('node' in next) {
+        node = ensurePathMapLine(getLine(next.node));
+      }
+    }
+    if (leaf === undefined && isLeaf(node[0])) {
+      leaf = getLine(node[0].leaf);
+      node = [];
+    }
+    return leaf;
+
+    // Get the line and ending offset with a given start offset
+    function getLine(offset: number) {
+      let cached = parsedLines.get(offset);
+      if (!cached) {
+        const c = data[offset];
+        cached =
+          c === '/' || c === '!' || c === '<' || c === '>' || c === '\n'
+            ? decodePathMapLine(data, offset)
+            : decodeJsonLine(data, offset);
+        parsedLines.set(offset, cached);
+      }
+      return cached;
+    }
+  }
+}
 
 export class PrefixTrie {
-  private separator: string;
   private root: TrieNode;
-  constructor(separator = '/') {
-    this.separator = separator;
+  constructor() {
     this.root = {};
   }
 
@@ -34,14 +201,12 @@ export class PrefixTrie {
     }
   }
 
-  insert(key: string, value: JSONValue): void {
-    const parts = key.split(this.separator);
-    // Inject leading slash if missing
-    if (parts[0] !== '') {
-      parts.unshift('');
+  insert(path: string, value: JSONValue): void {
+    if (path[0] !== '/') {
+      throw new TypeError('Paths must start with /');
     }
     let current = this.root;
-    for (const partRaw of parts) {
+    for (const partRaw of path.split('/')) {
       const part = decodeURIComponent(partRaw);
       if (!current[part]) {
         current[part] = {};
@@ -51,13 +216,13 @@ export class PrefixTrie {
     current[VALUE] = value;
   }
 
-  find(key: string): JSONValue | undefined {
-    const parts = key.split(this.separator);
-    if (parts[0] !== '') {
-      parts.unshift('');
+  find(path: string): JSONValue | undefined {
+    if (path[0] !== '/') {
+      throw new TypeError('Paths must start with /');
     }
     let current = this.root;
-    for (const part of parts) {
+    for (const rawPart of path.split('/')) {
+      const part = decodeURIComponent(rawPart);
       if (!current[part]) {
         return;
       }
@@ -68,11 +233,10 @@ export class PrefixTrie {
 
   // Depth first traversal of leaves and nodes
   stringify(debug = false): string {
-    const { root, separator } = this;
+    const { root } = this;
     let offset = 0;
     const lines: string[] = [];
     const seenLines: Record<string, number> = {};
-    console.log(root);
     walk(root[''], '');
     return lines.reverse().join('');
 
@@ -88,43 +252,54 @@ export class PrefixTrie {
       return offset;
     }
 
-    function walk(node: TrieNode, path: string): number {
-      const line: StringifyLine = [];
-      const leaf = node[VALUE];
-      if (leaf !== undefined) {
-        if (leaf === null) {
-          line.push(0);
-        } else {
-          line.push({ leafOffset: push(JSON.stringify(leaf)) });
-          if (debug) {
-            push(green(`LEAF: ${path}`));
-          }
-        }
+    function pushLeaf(value: JSONValue, path?: string) {
+      if (value === null) return null;
+      const entry = { leaf: push(JSON.stringify(value)) };
+      if (debug) {
+        push(green(`LEAF: ${path}`));
       }
+      return entry;
+    }
+
+    function walk(node: TrieNode, path?: string): number {
+      const line: PathMapLine = [];
+
+      // If the node is both a leaf and a node, write the leaf first
+      const initialLeaf = node[VALUE];
+      if (initialLeaf !== undefined) {
+        line.push(pushLeaf(initialLeaf, path));
+      }
+
+      // Walk the node sorted to increase deduplication chances
       for (const key of Object.keys(node).sort()) {
-        let child = node[key];
+        const child = node[key];
         line.push(key);
-        let subpath = path + separator + escapeSlash(key);
-        let segment: string | undefined;
-        // biome-ignore lint/suspicious/noAssignInExpressions: it's fine, really
-        while ((segment = getSingleSegment(child)) !== undefined) {
-          line.push(segment);
-          subpath += separator + escapeSlash(segment);
-          child = child[segment];
+        let subpath = '';
+        if (debug) {
+          subpath = (path === undefined ? '' : `${path}/`) + escapeSlash(key);
         }
-        const leaf = getLeafOnly(child);
-        if (leaf === null) {
-          line.push(0);
-        } else if (leaf !== undefined) {
-          line.push({ leafOffset: push(JSON.stringify(leaf)) });
-          if (debug) {
-            push(green(`LEAF: ${subpath}`));
-          }
+
+        // // Optimize chains of single entry nodes
+        // while (true) {
+        //   const segment = getSingleSegment(child);
+        //   if (segment === undefined) {
+        //     break;
+        //   }
+        //   line.push(segment);
+        //   if (debug) {
+        //     subpath += `/${escapeSlash(segment)}`;
+        //   }
+        //   child = child[segment];
+        // }
+
+        const childLeaf = getLeafOnly(child);
+        if (childLeaf !== undefined) {
+          line.push(pushLeaf(childLeaf, subpath));
         } else {
-          line.push({ childOffset: walk(child, subpath) });
+          line.push({ node: walk(child, subpath) });
         }
       }
-      const pos = push(compactEncode(line, offset));
+      const pos = push(encodePathMapLine(line, offset));
       if (debug) {
         push(path ? yellow(`NODE: ${path}`) : red('ROOT:'));
       }
@@ -135,30 +310,6 @@ export class PrefixTrie {
 
 function b36Encode(val: number): string {
   return val ? val.toString(36) : '';
-}
-
-// A custom serilization for prefix nodes that is cheaper than JSON
-// String path segments are `/${segment}`
-// The string escapes `/`, `\`, `<`, `>`, and `!` characters using `\`
-// Leaf pointers are `>${base_36_dist}
-// Node pointers are `<${base_36_dist}
-// Null Leaves are tab characters `!`
-function compactEncode(val: StringifyLine, offset: number): string {
-  return val
-    .map((item) => {
-      if (typeof item === 'string') {
-        return `/${item.replace(/[\\/<>!]/g, (c) => `\\${c}`)}`;
-      }
-      if (item === 0) return '!';
-      if ('leafOffset' in item) {
-        return `>${b36Encode(offset - item.leafOffset)}`;
-      }
-      if ('childOffset' in item) {
-        return `<${b36Encode(offset - item.childOffset)}`;
-      }
-      throw new TypeError(`Invalid value: ${val}`);
-    })
-    .join('');
 }
 
 function red(str: string): string {
