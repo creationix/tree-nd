@@ -97,6 +97,17 @@ describe('prefix-trie', () => {
       '/a/': '/a/',
       '/ab': '/ab',
       '/ab/': '/ab/',
+      '/n': null,
+      '/nu': null,
+      '/nul': null,
+      '/null': null,
+      '/null/': null,
+      '/null/v': null,
+      '/null/va': null,
+      '/null/val': null,
+      '/null/valu': null,
+      '/null/value': null,
+      '/null/value/': null,
     };
     writer.bulkInsert(input);
     for (const [k, v] of Object.entries(input)) {
