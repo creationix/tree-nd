@@ -171,8 +171,30 @@ describe('prefix-trie', () => {
     for (const [k, v] of Object.entries(input)) {
       expect(writer.find(k)).toEqual(v);
     }
-    // console.log(writer.stringify(true));
+    // console.log(writer.stringify());
     expect(writer.stringify().length).toBe(83);
+    const reader = new PrefixTrieReader(writer.stringify());
+    for (const [k, v] of Object.entries(input)) {
+      expect(reader.find(k)).toEqual(v);
+    }
+  });
+
+  it('should round trip realistic data with all null values', () => {
+    const writer = new PrefixTrie();
+    const input = {
+      '/women/trousers/yoga-pants/black': null,
+      '/women/trousers/yoga-pants/blue': null,
+      '/women/trousers/yoga-pants/brown': null,
+      '/women/trousers/zip-off-trousers/blue': null,
+      '/women/trousers/zip-off-trousers/black': null,
+      '/women/trousers/zip-off-trousers/brown': null,
+    };
+    writer.bulkInsert(input);
+    for (const [k, v] of Object.entries(input)) {
+      expect(writer.find(k)).toEqual(v);
+    }
+    // console.log(writer.stringify());
+    expect(writer.stringify().length).toBe(73);
     const reader = new PrefixTrieReader(writer.stringify());
     for (const [k, v] of Object.entries(input)) {
       expect(reader.find(k)).toEqual(v);
@@ -203,7 +225,10 @@ describe('prefix-trie', () => {
     for (const [k, v] of Object.entries(input)) {
       expect(writer.find(k)).toEqual(v);
     }
-    // console.log(writer.stringify(true));
+    // console.log('\nINPUT');
+    // console.log(input);
+    // console.log('\nOUTPUT');
+    // console.log(writer.stringify());
     expect(writer.stringify().length).toBe(667);
     const reader = new PrefixTrieReader(writer.stringify());
     for (const [k, v] of Object.entries(input)) {

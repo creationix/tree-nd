@@ -170,9 +170,13 @@ export class PrefixTrieReader {
         node = ensurePathMapLine(getLine(next.node));
       }
     }
-    if (leaf === undefined && isLeaf(node[0])) {
-      leaf = getLine(node[0].leaf);
-      node = [];
+    if (leaf === undefined) {
+      if (node[0] === null) {
+        leaf = null;
+      } else if (isLeaf(node[0])) {
+        leaf = getLine(node[0].leaf);
+        node = [];
+      }
     }
     return leaf;
 
