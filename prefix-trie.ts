@@ -27,18 +27,22 @@ function isTerm(char: string): boolean {
   );
 }
 
-function identity(char: string): string {
-  return char;
-}
-
 type PathMapEntry = string | null | { leaf: number } | { node: number };
 class PathMapLine extends Array<PathMapEntry> {}
+
+export function escapeSegment(segment: string): string {
+  return segment.replace(/[\\/<>!]/g, (c) => `\\${c}`);
+}
+
+export function unescapeSegment(escapedSegment: string): string {
+  return escapedSegment.replace(/\\(.)/g, (_, c) => c);
+}
 
 export function encodePathMapLine(line: PathMapLine, offset: number): string {
   return line
     .map((item) => {
       if (typeof item === 'string') {
-        return `/${item.replace(/[\\/<>!]/g, (c) => `\\${c}`)}`;
+        return `/${escapeSegment(item)}`;
       }
       if (item === null) {
         return '!';
@@ -99,7 +103,7 @@ export function decodePathMapLine(data: string, offset = 0): PathMapLine {
           offset++;
         }
       }
-      line.push(data.substring(start, offset).replace(/\\(.)/g, identity));
+      line.push(unescapeSegment(data.substring(start, offset)));
     } else if (char === '!') {
       line.push(null);
       offset++;
