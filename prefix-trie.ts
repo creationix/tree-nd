@@ -1,0 +1,380 @@
+const VALUE = Symbol('value');
+
+interface TrieNode {
+  [key: string]: TrieNode;
+  [VALUE]?: JSONValue;
+}
+
+type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [key: string]: JSONValue };
+
+function isB64(char: string): boolean {
+  return (
+    (char >= 'A' && char <= 'Z') ||
+    (char >= 'a' && char <= 'z') ||
+    (char >= '0' && char <= '9') ||
+    char === '-' ||
+    char === '_'
+  );
+}
+
+function isTerm(char: string): boolean {
+  return (
+    char === '/' ||
+    char === '<' ||
+    char === '>' ||
+    char === '!' ||
+    char === '\n'
+  );
+}
+
+type PathMapEntry = string | null | { leaf: number } | { node: number };
+class PathMapLine extends Array<PathMapEntry> {}
+
+export function escapeSegment(segment: string): string {
+  return segment.replace(/[\\/<>!]/g, (c) => `\\${c}`);
+}
+
+export function unescapeSegment(escapedSegment: string): string {
+  return escapedSegment.replace(/\\(.)/g, (_, c) => c);
+}
+
+export function encodePathMapLine(line: PathMapLine): string {
+  return line
+    .map((item) => {
+      if (typeof item === 'string') {
+        return `/${escapeSegment(item)}`;
+      }
+      if (item === null) {
+        return '!';
+      }
+      if ('leaf' in item) {
+        return `>${toInt64(item.leaf)}`;
+      }
+      if ('node' in item) {
+        return `<${toInt64(item.node)}`;
+      }
+      throw new TypeError(`Invalid value: ${item}`);
+    })
+    .join('');
+}
+
+export function decodePathMapLine(data: string): PathMapLine {
+  if (isTerm(data[0]) === false) {
+    throw new Error('Invalid path map line');
+  }
+  let offset = 0;
+  const line = new PathMapLine();
+  const length = data.length;
+  while (offset < length) {
+    const char = data[offset];
+    if (char === '\n') {
+      offset++;
+      return line;
+    }
+    if (char === '/') {
+      offset++;
+      const start = offset;
+      while (offset < length) {
+        const c = data[offset];
+        if (isTerm(c)) {
+          break;
+        }
+        if (c === '\\') {
+          offset += 2;
+        } else {
+          offset++;
+        }
+      }
+      line.push(unescapeSegment(data.substring(start, offset)));
+    } else if (char === '!') {
+      line.push(null);
+      offset++;
+    } else if (char === '<' || char === '>') {
+      offset++;
+      const start = offset;
+      while (isB64(data[offset])) {
+        offset++;
+      }
+      const num =
+        offset === start ? 0 : parseInt64(data.substring(start, offset));
+      if (char === '<') {
+        line.push({ node: num });
+      } else {
+        line.push({ leaf: num });
+      }
+    }
+  }
+  throw new Error('Unexpected EOF');
+}
+
+function ensurePathMapLine(node: PathMapLine | JSONValue): PathMapLine {
+  if (node instanceof PathMapLine) return node;
+  throw new Error('Unexpected JSON payload');
+}
+
+function isLeaf(entry: PathMapEntry): entry is { leaf: number } {
+  return Boolean(entry && typeof entry === 'object' && 'leaf' in entry);
+}
+
+export class PrefixTrieReader {
+  private rootOffset: number;
+  private data: Uint8Array;
+  private parsedLines: Map<number, PathMapLine | JSONValue>;
+
+  constructor(data: Uint8Array | string) {
+    const bytes =
+      typeof data === 'string' ? new TextEncoder().encode(data) : data;
+    // Find the start of the last line
+    let offset = bytes.length;
+    while (bytes[offset - 1] === 0x0a) {
+      offset--;
+    }
+    while (bytes[offset - 1] !== 0x0a) {
+      offset--;
+    }
+    this.rootOffset = offset;
+    this.data = bytes;
+    this.parsedLines = new Map();
+  }
+
+  find(path: string): JSONValue | undefined {
+    if (path[0] !== '/') {
+      throw new TypeError('Paths must start with /');
+    }
+    const data = this.data;
+    const parsedLines = this.parsedLines;
+
+    let leaf: JSONValue | undefined;
+    let node: PathMapLine = ensurePathMapLine(getLine(this.rootOffset));
+    for (const rawPart of path.substring(1).split('/')) {
+      const part = decodeURIComponent(rawPart);
+      const index = node.indexOf(part);
+      if (index < 0) return; // No matching node
+      const next = node[index + 1];
+      if (typeof next === 'string') {
+        // This is where chained path optimization might go
+        throw new Error('Unexpected string');
+      } else if (next === null) {
+        leaf = null;
+        node = [];
+      } else if (isLeaf(next)) {
+        leaf = getLine(next.leaf);
+        node = [];
+      } else if ('node' in next) {
+        node = ensurePathMapLine(getLine(next.node));
+      }
+    }
+    if (leaf === undefined) {
+      if (node[0] === null) {
+        leaf = null;
+      } else if (isLeaf(node[0])) {
+        leaf = getLine(node[0].leaf);
+        node = [];
+      }
+    }
+    return leaf;
+
+    // Get the line and ending offset with a given start offset
+    function getLine(offset: number) {
+      let cached = parsedLines.get(offset);
+      if (!cached) {
+        const c = String.fromCharCode(data[offset]);
+        cached =
+          c === '/' || c === '!' || c === '<' || c === '>' || c === '\n'
+            ? decodePathMapLine(getUTF8Line(data, offset))
+            : (JSON.parse(getUTF8Line(data, offset)) as JSONValue);
+        parsedLines.set(offset, cached);
+      }
+      return cached;
+    }
+  }
+}
+
+export class PrefixTrie {
+  private root: TrieNode;
+  constructor() {
+    this.root = {};
+  }
+
+  bulkInsert(entries: Record<string, JSONValue>): void {
+    for (const [key, value] of Object.entries(entries)) {
+      this.insert(key, value);
+    }
+  }
+
+  insert(path: string, value: JSONValue): void {
+    if (path[0] !== '/') {
+      throw new TypeError('Paths must start with /');
+    }
+    let current = this.root;
+    for (const partRaw of path.split('/')) {
+      const part = decodeURIComponent(partRaw);
+      if (!current[part]) {
+        current[part] = {};
+      }
+      current = current[part];
+    }
+    current[VALUE] = value;
+  }
+
+  find(path: string): JSONValue | undefined {
+    if (path[0] !== '/') {
+      throw new TypeError('Paths must start with /');
+    }
+    let current = this.root;
+    for (const rawPart of path.split('/')) {
+      const part = decodeURIComponent(rawPart);
+      if (!current[part]) {
+        return;
+      }
+      current = current[part];
+    }
+    return current[VALUE];
+  }
+
+  // Depth first traversal of leaves and nodes
+  stringify(debug = false): string {
+    const { root } = this;
+    let offset = 0;
+    const lines: string[] = [];
+    const seenLines: Record<string, number> = {};
+    walk(root[''], '');
+    return lines.join('');
+
+    function push(str: string): number {
+      const seenIndex = seenLines[str];
+      if (seenIndex !== undefined) {
+        return seenIndex;
+      }
+      const start = offset;
+      seenLines[str] = start;
+      offset +=
+        str[0] === '\x1b' ? 0 : new TextEncoder().encode(str).length + 1;
+      lines.push(`${str}\n`);
+      return start;
+    }
+
+    function pushLeaf(value: JSONValue, path?: string) {
+      if (value === null) return null;
+      const line = JSON.stringify(value);
+      if (debug && seenLines[line] === undefined) {
+        push(green(`LEAF: ${path}`));
+      }
+      return { leaf: push(line) };
+    }
+
+    function walk(node: TrieNode, path?: string): number {
+      const line: PathMapLine = [];
+
+      // If the node is both a leaf and a node, write the leaf first
+      const initialLeaf = node[VALUE];
+      if (initialLeaf !== undefined) {
+        line.push(pushLeaf(initialLeaf, path));
+      }
+
+      // Walk the node sorted to increase deduplication chances
+      for (const key of Object.keys(node).sort()) {
+        const child = node[key];
+        line.push(key);
+        let subpath = '';
+        if (debug) {
+          subpath = (path === undefined ? '' : `${path}/`) + escapeSlash(key);
+        }
+
+        // // Optimize chains of single entry nodes
+        // while (true) {
+        //   const segment = getSingleSegment(child);
+        //   if (segment === undefined) {
+        //     break;
+        //   }
+        //   line.push(segment);
+        //   if (debug) {
+        //     subpath += `/${escapeSlash(segment)}`;
+        //   }
+        //   child = child[segment];
+        // }
+
+        const childLeaf = getLeafOnly(child);
+        if (childLeaf !== undefined) {
+          line.push(pushLeaf(childLeaf, subpath));
+        } else {
+          line.push({ node: walk(child, subpath) });
+        }
+      }
+      if (debug) {
+        push(path ? yellow(`NODE: ${path}`) : red('ROOT:'));
+      }
+      return push(encodePathMapLine(line));
+    }
+  }
+}
+
+function red(str: string): string {
+  return `\x1b[31m${str}\x1b[0m`;
+}
+function yellow(str: string): string {
+  return `\x1b[33m${str}\x1b[0m`;
+}
+function green(str: string): string {
+  return `\x1b[32m${str}\x1b[0m`;
+}
+
+// Get the leaf value if this node is only a leaf
+function getLeafOnly(node: TrieNode) {
+  if (Object.keys(node).length === 0 && node[VALUE] !== undefined) {
+    return node[VALUE];
+  }
+}
+
+function getSingleSegment(node: TrieNode): string | undefined {
+  const keys = Object.keys(node);
+  if (node[VALUE] === undefined && keys.length === 1) {
+    return keys[0];
+  }
+}
+
+// Reduced form of encodeURIComponent that only escapes `/`
+// Used for debugging paths
+function escapeSlash(segment: string): string {
+  return segment.replace(/\//g, '%2f');
+}
+
+function getUTF8Line(data: Uint8Array, start: number): string {
+  let end = start;
+  while (data[end++] !== 0x0a) {
+    if (end >= data.length) {
+      throw new Error('Unexpected EOF');
+    }
+  }
+  return new TextDecoder().decode(data.subarray(start, end));
+}
+
+const b64Chars =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+// Decode an integer using the same digits at base64URL,
+// but as a big-endian integer
+function parseInt64(num: string): number {
+  const chars = Array.from(num);
+  let result = 0n;
+  for (const char of chars) {
+    result = (result << 6n) | BigInt(b64Chars.indexOf(char));
+  }
+  return Number(result);
+}
+
+// Encode a number using big-endian b64Chars
+function toInt64(num: number): string {
+  let str = '';
+  while (num > 0) {
+    str = b64Chars[num & 0x3f] + str;
+    num >>= 6;
+  }
+  return str;
+}

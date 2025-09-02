@@ -1,4 +1,4 @@
-# PathMap: Optimized Storage for Large Key-Value Datasets
+# PathMap: Optimized Storage for Large Path-Value Datasets
 
 PathMap is a file format designed for applications that need to store and query millions of small key-value mappings efficiently while maintaining human debuggability. 
 
