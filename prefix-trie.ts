@@ -13,8 +13,14 @@ type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue };
 
-function isB36(char: string): boolean {
-  return (char >= '0' && char <= '9') || (char >= 'a' && char <= 'z');
+function isB64(char: string): boolean {
+  return (
+    (char >= 'A' && char <= 'Z') ||
+    (char >= 'a' && char <= 'z') ||
+    (char >= '0' && char <= '9') ||
+    char === '-' ||
+    char === '_'
+  );
 }
 
 function isTerm(char: string): boolean {
@@ -38,7 +44,7 @@ export function unescapeSegment(escapedSegment: string): string {
   return escapedSegment.replace(/\\(.)/g, (_, c) => c);
 }
 
-export function encodePathMapLine(line: PathMapLine, offset: number): string {
+export function encodePathMapLine(line: PathMapLine): string {
   return line
     .map((item) => {
       if (typeof item === 'string') {
@@ -48,45 +54,27 @@ export function encodePathMapLine(line: PathMapLine, offset: number): string {
         return '!';
       }
       if ('leaf' in item) {
-        return `>${b36Encode(offset - item.leaf)}`;
+        return `>${toInt64(item.leaf)}`;
       }
       if ('node' in item) {
-        return `<${b36Encode(offset - item.node)}`;
+        return `<${toInt64(item.node)}`;
       }
       throw new TypeError(`Invalid value: ${item}`);
     })
     .join('');
 }
 
-export function decodeJsonLine(data: string, offset = 0): JSONValue {
-  const start = offset;
-  const length = data.length;
-  while (offset < length) {
-    if (data[offset] === '\n') {
-      return JSON.parse(data.substring(start, offset));
-    }
-    offset++;
+export function decodePathMapLine(data: string): PathMapLine {
+  if (isTerm(data[0]) === false) {
+    throw new Error('Invalid path map line');
   }
-  throw new Error('Unexpected EOF');
-}
-
-export function decodePathMapLine(data: string, offset = 0): PathMapLine {
+  let offset = 0;
   const line = new PathMapLine();
   const length = data.length;
   while (offset < length) {
     const char = data[offset];
     if (char === '\n') {
       offset++;
-      for (let i = 0, l = line.length; i < l; i++) {
-        const entry = line[i];
-        if (entry && typeof entry === 'object') {
-          if ('leaf' in entry) {
-            entry.leaf += offset;
-          } else if ('node' in entry) {
-            entry.node += offset;
-          }
-        }
-      }
       return line;
     }
     if (char === '/') {
@@ -110,11 +98,11 @@ export function decodePathMapLine(data: string, offset = 0): PathMapLine {
     } else if (char === '<' || char === '>') {
       offset++;
       const start = offset;
-      while (isB36(data[offset])) {
+      while (isB64(data[offset])) {
         offset++;
       }
       const num =
-        offset === start ? 0 : parseInt(data.substring(start, offset), 36);
+        offset === start ? 0 : parseInt64(data.substring(start, offset));
       if (char === '<') {
         line.push({ node: num });
       } else {
@@ -135,11 +123,23 @@ function isLeaf(entry: PathMapEntry): entry is { leaf: number } {
 }
 
 export class PrefixTrieReader {
-  private data: string;
+  private rootOffset: number;
+  private data: Uint8Array;
   private parsedLines: Map<number, PathMapLine | JSONValue>;
 
-  constructor(data: string) {
-    this.data = data;
+  constructor(data: Uint8Array | string) {
+    const bytes =
+      typeof data === 'string' ? new TextEncoder().encode(data) : data;
+    // Find the start of the last line
+    let offset = bytes.length;
+    while (bytes[offset - 1] === 0x0a) {
+      offset--;
+    }
+    while (bytes[offset - 1] !== 0x0a) {
+      offset--;
+    }
+    this.rootOffset = offset;
+    this.data = bytes;
     this.parsedLines = new Map();
   }
 
@@ -151,11 +151,10 @@ export class PrefixTrieReader {
     const parsedLines = this.parsedLines;
 
     let leaf: JSONValue | undefined;
-    let node: PathMapLine = ensurePathMapLine(getLine(0));
+    let node: PathMapLine = ensurePathMapLine(getLine(this.rootOffset));
     for (const rawPart of path.substring(1).split('/')) {
       const part = decodeURIComponent(rawPart);
       const index = node.indexOf(part);
-      console.log({ part, node, index });
       if (index < 0) return; // No matching node
       const next = node[index + 1];
       if (typeof next === 'string') {
@@ -181,11 +180,11 @@ export class PrefixTrieReader {
     function getLine(offset: number) {
       let cached = parsedLines.get(offset);
       if (!cached) {
-        const c = data[offset];
+        const c = String.fromCharCode(data[offset]);
         cached =
           c === '/' || c === '!' || c === '<' || c === '>' || c === '\n'
-            ? decodePathMapLine(data, offset)
-            : decodeJsonLine(data, offset);
+            ? decodePathMapLine(getUTF8Line(data, offset))
+            : (JSON.parse(getUTF8Line(data, offset)) as JSONValue);
         parsedLines.set(offset, cached);
       }
       return cached;
@@ -242,27 +241,28 @@ export class PrefixTrie {
     const lines: string[] = [];
     const seenLines: Record<string, number> = {};
     walk(root[''], '');
-    return lines.reverse().join('');
+    return lines.join('');
 
     function push(str: string): number {
       const seenIndex = seenLines[str];
       if (seenIndex !== undefined) {
         return seenIndex;
       }
+      const start = offset;
+      seenLines[str] = start;
       offset +=
         str[0] === '\x1b' ? 0 : new TextEncoder().encode(str).length + 1;
       lines.push(`${str}\n`);
-      seenLines[str] = offset;
-      return offset;
+      return start;
     }
 
     function pushLeaf(value: JSONValue, path?: string) {
       if (value === null) return null;
-      const entry = { leaf: push(JSON.stringify(value)) };
-      if (debug) {
+      const line = JSON.stringify(value);
+      if (debug && seenLines[line] === undefined) {
         push(green(`LEAF: ${path}`));
       }
-      return entry;
+      return { leaf: push(line) };
     }
 
     function walk(node: TrieNode, path?: string): number {
@@ -303,17 +303,12 @@ export class PrefixTrie {
           line.push({ node: walk(child, subpath) });
         }
       }
-      const pos = push(encodePathMapLine(line, offset));
       if (debug) {
         push(path ? yellow(`NODE: ${path}`) : red('ROOT:'));
       }
-      return pos;
+      return push(encodePathMapLine(line));
     }
   }
-}
-
-function b36Encode(val: number): string {
-  return val ? val.toString(36) : '';
 }
 
 function red(str: string): string {
@@ -344,4 +339,38 @@ function getSingleSegment(node: TrieNode): string | undefined {
 // Used for debugging paths
 function escapeSlash(segment: string): string {
   return segment.replace(/\//g, '%2f');
+}
+
+function getUTF8Line(data: Uint8Array, start: number): string {
+  let end = start;
+  while (data[end++] !== 0x0a) {
+    if (end >= data.length) {
+      throw new Error('Unexpected EOF');
+    }
+  }
+  return new TextDecoder().decode(data.subarray(start, end));
+}
+
+const b64Chars =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+// Decode an integer using the same digits at base64URL,
+// but as a big-endian integer
+function parseInt64(num: string): number {
+  const chars = Array.from(num);
+  let result = 0n;
+  for (const char of chars) {
+    result = (result << 6n) | BigInt(b64Chars.indexOf(char));
+  }
+  return Number(result);
+}
+
+// Encode a number using big-endian b64Chars
+function toInt64(num: number): string {
+  let str = '';
+  while (num > 0) {
+    str = b64Chars[num & 0x3f] + str;
+    num >>= 6;
+  }
+  return str;
 }

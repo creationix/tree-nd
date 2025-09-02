@@ -8,62 +8,51 @@ import {
 
 describe('pathmap-line', () => {
   it('should encode correctly', () => {
-    expect(encodePathMapLine([], 0)).toEqual('');
-    expect(encodePathMapLine(['hello', null, 'world', null], 0)).toEqual(
+    expect(encodePathMapLine([])).toEqual('');
+    expect(encodePathMapLine(['hello', null, 'world', null])).toEqual(
       '/hello!/world!',
     );
-    expect(encodePathMapLine([{ node: 0 }, null, { leaf: 0 }], 0)).toEqual(
-      '<!>',
-    );
-    expect(encodePathMapLine([{ node: 10 }, null, { leaf: 10 }], 10)).toEqual(
-      '<!>',
-    );
-    expect(encodePathMapLine([{ node: 10 }, null, { leaf: 10 }], 11)).toEqual(
-      '<1!>1',
-    );
-    expect(encodePathMapLine([{ node: 10 }, null, { leaf: 10 }], 46)).toEqual(
-      '<10!>10',
+    expect(encodePathMapLine([{ node: 0 }, null, { leaf: 0 }])).toEqual('<!>');
+    expect(encodePathMapLine([{ node: 10 }, null, { leaf: 10 }])).toEqual(
+      '<K!>K',
     );
     expect(
-      encodePathMapLine(
-        [{ node: 10 }, { leaf: 20 }, { node: 30 }, { leaf: 40 }],
-        100,
-      ),
-    ).toEqual('<2i>28<1y>1o');
-    expect(encodePathMapLine(['fancy/paths', 'with\\slashes'], 0)).toEqual(
+      encodePathMapLine([
+        { node: 10 },
+        { leaf: 20 },
+        { node: 30 },
+        { leaf: 40 },
+      ]),
+    ).toEqual('<K>U<e>o');
+    expect(encodePathMapLine(['fancy/paths', 'with\\slashes'])).toEqual(
       '/fancy\\/paths/with\\\\slashes',
     );
-    expect(encodePathMapLine(['fancy <b> bold', 'paths!'], 0)).toEqual(
+    expect(encodePathMapLine(['fancy <b> bold', 'paths!'])).toEqual(
       '/fancy \\<b\\> bold/paths\\!',
     );
   });
 
-  it.only('should decode correctly', () => {
+  it('should decode correctly', () => {
     expect(decodePathMapLine('/fancy\\/paths/with\\\\slashes\n')).toEqual([
       'fancy/paths',
       'with\\slashes',
     ]);
     expect(decodePathMapLine('\n!\n')).toEqual([]);
-    expect(decodePathMapLine('\n!\n', 1)).toEqual([null]);
-    expect(() => decodePathMapLine('\n!\n', 3)).toThrowError();
+    expect(decodePathMapLine('!\n')).toEqual([null]);
+    expect(() => decodePathMapLine('')).toThrowError();
+    expect(() => decodePathMapLine('bad\n')).toThrowError();
     expect(decodePathMapLine('/hello/world\n')).toEqual(['hello', 'world']);
-    expect(decodePathMapLine('<!>\n')).toEqual([
+    expect(decodePathMapLine('<E!>E\n')).toEqual([
       { node: 4 },
       null,
       { leaf: 4 },
     ]);
-    expect(decodePathMapLine('/foo>3\n', 0)).toEqual(['foo', { leaf: 10 }]);
-    expect(decodePathMapLine('<2i>28<1y>1o\n', 0)).toEqual([
-      { node: 103 },
-      { leaf: 93 },
-      { node: 83 },
-      { leaf: 73 },
-    ]);
-    expect(decodePathMapLine('      \n<2i>28<1y>1o\n', 7)).toEqual([
-      { node: 110 },
-      { leaf: 100 },
+    expect(decodePathMapLine('/foo>K\n')).toEqual(['foo', { leaf: 10 }]);
+    expect(decodePathMapLine('<Ba>BQ<BG>8\n')).toEqual([
       { node: 90 },
       { leaf: 80 },
+      { node: 70 },
+      { leaf: 60 },
     ]);
   });
 });
@@ -73,7 +62,7 @@ describe('prefix-trie', () => {
     writer.insert('/foo', { bar: 'baz' });
     expect(writer.find('/foo')).toEqual({ bar: 'baz' });
     expect(writer.find('/')).toBeUndefined();
-    console.log(writer.stringify(true));
+    // console.log(writer.stringify(true));
     const reader = new PrefixTrieReader(writer.stringify());
     expect(reader.find('/foo')).toEqual({ bar: 'baz' });
     expect(reader.find('/')).toBeUndefined();
@@ -92,7 +81,7 @@ describe('prefix-trie', () => {
     for (const [k, v] of Object.entries(input)) {
       expect(writer.find(k)).toEqual(v);
     }
-    console.log(writer.stringify(true));
+    // console.log(writer.stringify(true));
     const reader = new PrefixTrieReader(writer.stringify());
     for (const [k, v] of Object.entries(input)) {
       expect(reader.find(k)).toEqual(v);
@@ -103,7 +92,8 @@ describe('prefix-trie', () => {
     const writer = new PrefixTrie();
     const input = {
       '/': '/',
-      '/a': '/',
+      '/2': '/',
+      '/a': '/a',
       '/a/': '/a/',
       '/ab': '/ab',
       '/ab/': '/ab/',
@@ -112,7 +102,7 @@ describe('prefix-trie', () => {
     for (const [k, v] of Object.entries(input)) {
       expect(writer.find(k)).toEqual(v);
     }
-    console.log(writer.stringify(true));
+    // console.log(writer.stringify(true));
     const reader = new PrefixTrieReader(writer.stringify());
     for (const [k, v] of Object.entries(input)) {
       expect(reader.find(k)).toEqual(v);
@@ -128,17 +118,13 @@ describe('prefix-trie', () => {
     ];
     const input = Object.fromEntries(
       paths.map((path) => [
-        // '/' + path.map((segment) => segment.replace(/\//g, '%2f')).join('/'),
         `/${path.map((segment) => encodeURIComponent(segment)).join('/')}`,
         path,
       ]),
     );
     const writer = new PrefixTrie();
     writer.bulkInsert(input);
-
-    console.log('INPUT', input);
-    console.log(writer.stringify(true));
-
+    // console.log(writer.stringify(true));
     for (const [k, v] of Object.entries(input)) {
       expect(writer.find(k)).toEqual(v);
     }
@@ -149,53 +135,79 @@ describe('prefix-trie', () => {
     }
   });
 
-  //   //   expect(trie.stringify()).toEqual(
-  //   //     '/and/\\<b\\>bold\\<\\/b\\>/path>21/exciting\\!/times\\!>1e/fancy\\/path/with/more>l/what\\\\is/this?>\n' +
-  //   //       '["what\\\\is","this?"]\n' +
-  //   //       '["fancy/path","with","more"]\n' +
-  //   //       '["exciting!","times!"]\n' +
-  //   //       '["and","<b>bold</b>","path"]\n',
-  //   //   );
-  //   // });
+  it('should round trip realistic data without deduplication', () => {
+    const writer = new PrefixTrie();
+    const input = {
+      '/women/trousers/yoga-pants/black': 1,
+      '/women/trousers/yoga-pants/blue': 2,
+      '/women/trousers/yoga-pants/brown': 3,
+      '/women/trousers/zip-off-trousers/blue': 4,
+      '/women/trousers/zip-off-trousers/black': 5,
+      '/women/trousers/zip-off-trousers/brown': 6,
+    };
+    writer.bulkInsert(input);
+    for (const [k, v] of Object.entries(input)) {
+      expect(writer.find(k)).toEqual(v);
+    }
+    // console.log(writer.stringify(true));
+    expect(writer.stringify().length).toBe(114);
+    const reader = new PrefixTrieReader(writer.stringify());
+    for (const [k, v] of Object.entries(input)) {
+      expect(reader.find(k)).toEqual(v);
+    }
+  });
+
+  it('should round trip realistic data with deduplication', () => {
+    const writer = new PrefixTrie();
+    const input = {
+      '/women/trousers/yoga-pants/black': 1,
+      '/women/trousers/yoga-pants/blue': 2,
+      '/women/trousers/yoga-pants/brown': 3,
+      '/women/trousers/zip-off-trousers/blue': 2,
+      '/women/trousers/zip-off-trousers/black': 1,
+      '/women/trousers/zip-off-trousers/brown': 3,
+    };
+    writer.bulkInsert(input);
+    for (const [k, v] of Object.entries(input)) {
+      expect(writer.find(k)).toEqual(v);
+    }
+    // console.log(writer.stringify(true));
+    expect(writer.stringify().length).toBe(83);
+    const reader = new PrefixTrieReader(writer.stringify());
+    for (const [k, v] of Object.entries(input)) {
+      expect(reader.find(k)).toEqual(v);
+    }
+  });
+
+  it('should use byte offsets with unicode characters', () => {
+    const writer = new PrefixTrie();
+    const input = {
+      '/poems/runes': 'ᚠᛇᚻ᛫ᛒᛦᚦ᛫ᚠᚱᚩᚠᚢᚱ᛫ᚠᛁᚱᚪ᛫ᚷᛖᚻᚹᛦᛚᚳᚢᛗ',
+      '/poems/middle/english': 'An preost wes on leoden, Laȝamon was ihoten',
+      '/poems/middle/deutsch': 'Sîne klâwen durh die wolken sint geslagen',
+      '/poems/ελληνικά': 'Τη γλώσσα μου έδωσαν ελληνική',
+      '/poems/русский': 'На берегу пустынных волн',
+      '/poems/russian': 'На берегу пустынных волн',
+      '/poems/ქართული': 'ვეპხის ტყაოსანი შოთა რუსთაველი',
+      '/poems/georgian': 'ვეპხის ტყაოსანი შოთა რუსთაველი',
+      '/poems/𐐼𐐯𐑅𐐨𐑉𐐯𐐻': '𐐙𐐩𐑃 𐐺𐐨𐐮𐑍 𐑄 𐑁𐐲𐑉𐑅𐐻 𐐹𐑉𐐮𐑌𐑅𐐲𐐹𐐲𐑊 𐐮𐑌 𐑉𐐮𐑂𐐨𐑊𐐲𐐼 𐑉𐐮𐑊𐐮𐐾𐐲𐑌',
+      '/poems/deseret': '𐐙𐐩𐑃 𐐺𐐨𐐮𐑍 𐑄 𐑁𐐲𐑉𐑅𐐻 𐐹𐑉𐐮𐑌𐑅𐐲𐐹𐐲𐑊 𐐮𐑌 𐑉𐐮𐑂𐐨𐑊𐐲𐐼 𐑉𐐮𐑊𐐮𐐾𐐲𐑌',
+      '/emojis/smileys': '😂🫠😉☺️🥲😋🫣🤫🤔🫡',
+      '/emojis/animals/mammals': '🐵🐒🦍🦧🐶🐕🦮🐕‍🦺🐩🐺🦊',
+      '/emojis/animals/marine-animals': '🐳🐋🐬🦭🐟🐠🐡🦈🐙🐚🪸🪼',
+      '/emojis/animals/insects-and-bugs': '🐌🦋🐛🐜🐝🪲🐞🦗🪳🕷️🕸️🦂🦟🪰🪱🦠',
+      '/emojis/🌈': '🟥🟧🟨🟩🟦🟪',
+      '/emojis/rainbow': '🟥🟧🟨🟩🟦🟪',
+    };
+    writer.bulkInsert(input);
+    for (const [k, v] of Object.entries(input)) {
+      expect(writer.find(k)).toEqual(v);
+    }
+    // console.log(writer.stringify(true));
+    expect(writer.stringify().length).toBe(667);
+    const reader = new PrefixTrieReader(writer.stringify());
+    for (const [k, v] of Object.entries(input)) {
+      expect(reader.find(k)).toEqual(v);
+    }
+  });
 });
-
-// // // const trie = new PrefixTrie();
-
-// // // console.log(trie.stringify(true));
-
-// // const trie3 = new PrefixTrie();
-// // trie3.bulkInsert({
-
-// //   // '/women/trousers/yoga-pants/black': 1,
-// //   // '/women/trousers/yoga-pants/blue': 2,
-// //   // '/women/trousers/yoga-pants/brown': 3,
-// //   // '/women/trousers/zip-off-trousers/blue': 4,
-// //   // '/women/trousers/zip-off-trousers/black': 5,
-// //   // '/women/trousers/zip-off-trousers/brown': 6,
-// // });
-// // console.log(trie3.stringify(true));
-
-// // /*
-// // "/foo.html"                    LEAF: /foo
-// // ["/foo/bar.html",307]          LEAF: /foo/bar
-// // [12,"bar",22,"baz","",0]       NODE: /foo
-// // {"yummy":true}                 LEAF: /apple/pie
-// // ["foo",-25,"apple","pie",15]   ROOT:
-// // */
-
-// // import { readFileSync, writeFileSync } from 'node:fs';
-// // const trie2 = new PrefixTrie();
-// // const data = JSON.parse(
-// //   readFileSync('./hof-prd-product-list-page-paths.json', 'utf8'),
-// // );
-// // for (const path of data) {
-// //   trie2.insert(path, null);
-// // }
-// // writeFileSync('./hof-prd-product-list-page-paths.pmap', trie2.stringify(false));
-
-// // /*
-// // /apple/pie<w/foo<
-// // 48 /bar>/baz/!
-// // 36 ["/foo/bar.html",307]
-// // 14 {"yummy":true}
-// // */
