@@ -13,13 +13,13 @@ type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue };
 
-function isTerm(char: string): boolean {
-  return char === '/' || char === ':' || char === '!' || char === '\n';
-}
-
 class PathMapNode {
   [VALUE]?: null | number;
   [key: string]: null | number;
+}
+
+function isPmapDelimiter(char: string): boolean {
+  return char === '/' || char === ':' || char === '!' || char === '\n';
 }
 
 export function escapeSegment(segment: string): string {
@@ -46,7 +46,7 @@ export function encodePathMapNode(node: PathMapNode): string {
 }
 
 export function decodePathMapNode(data: string): PathMapNode {
-  if (isTerm(data[0]) === false) {
+  if (isPmapDelimiter(data[0]) === false) {
     throw new Error('Invalid path map line');
   }
   let offset = 0;
@@ -60,14 +60,14 @@ export function decodePathMapNode(data: string): PathMapNode {
       return node;
     }
     if (char === '/') {
-      if (key && key !== VALUE) {
+      if (typeof key === 'string') {
         throw new Error('Unexpected key after key');
       }
       offset++;
       const start = offset;
       while (offset < length) {
         const c = data[offset];
-        if (isTerm(c)) {
+        if (isPmapDelimiter(c)) {
           break;
         }
         if (c === '\\') {
@@ -79,14 +79,14 @@ export function decodePathMapNode(data: string): PathMapNode {
       key = unescapeSegment(data.substring(start, offset));
     } else if (char === '!') {
       if (key === undefined) {
-        throw new Error("Expected key before '!'");
+        throw new Error("Missing key before '!'");
       }
       node[key] = null;
       key = undefined;
       offset++;
     } else if (char === ':') {
       if (key === undefined) {
-        throw new Error("Expected key before ':'");
+        throw new Error("Missing key before ':'");
       }
       offset++;
       const start = offset;
@@ -172,7 +172,7 @@ export class PrefixTrieReader {
       let cached = parsedLines.get(offset);
       if (!cached) {
         const line = getUTF8Line(data, offset);
-        cached = isTerm(String.fromCharCode(data[offset]))
+        cached = isPmapDelimiter(String.fromCharCode(data[offset]))
           ? decodePathMapNode(line)
           : (JSON.parse(line) as JSONValue);
         parsedLines.set(offset, cached);
@@ -256,27 +256,27 @@ export class PrefixTrie {
       return push(line);
     }
 
-    function walkNode(node: TrieNode, path?: string): number {
-      const line = new PathMapNode();
+    function walkNode(trieNode: TrieNode, path?: string): number {
+      const node = new PathMapNode();
       // If the node is both a leaf and a node, write the leaf first
-      const leaf = node[VALUE];
+      const leaf = trieNode[VALUE];
       if (leaf !== undefined) {
-        line[VALUE] = pushLeaf(leaf, path);
+        node[VALUE] = pushLeaf(leaf, path);
       }
       // Walk the node sorted to increase deduplication chances
-      for (const key of Object.keys(node).sort()) {
-        const child = node[key];
+      for (const key of Object.keys(trieNode).sort()) {
+        const child = trieNode[key];
         const subpath = debug
           ? `${path ?? ''}/${key.replace(/\//g, '%2f')}`
           : undefined;
         const childLeaf = child[VALUE];
         if (childLeaf !== undefined && Object.keys(child).length === 0) {
-          line[key] = pushLeaf(childLeaf, subpath);
+          node[key] = pushLeaf(childLeaf, subpath);
         } else {
-          line[key] = walkNode(child, subpath);
+          node[key] = walkNode(child, subpath);
         }
       }
-      const encodedLine = encodePathMapNode(line);
+      const encodedLine = encodePathMapNode(node);
       if (debug && seenLines[encodedLine] === undefined) {
         push(path ? yellow(`NODE: ${path}`) : red('ROOT:'));
       }
