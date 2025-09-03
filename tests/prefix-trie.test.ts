@@ -1,42 +1,67 @@
 import { describe, it, expect } from 'bun:test';
 
 import {
-  encodePathMapLine,
-  decodePathMapLine,
+  encodePathMapNode,
+  decodePathMapNode,
   PrefixTrie,
   PrefixTrieReader,
+  VALUE,
 } from '../src/prefix-trie.ts';
 
 describe('pathmap-line', () => {
   it('should encode correctly', () => {
-    expect(encodePathMapLine([])).toEqual('');
-    expect(encodePathMapLine(['hello', null, 'world', null])).toEqual(
+    expect(encodePathMapNode({})).toEqual('');
+    expect(encodePathMapNode({ hello: null, world: null })).toEqual(
       '/hello!/world!',
     );
-    expect(encodePathMapLine([0, null, 0])).toEqual(':!:');
-    expect(encodePathMapLine([10, null, 10])).toEqual(':a!:a');
-    expect(encodePathMapLine([10, 20, 30, 40])).toEqual(':a:k:u:14');
-    expect(encodePathMapLine(['fancy/paths', 'with\\slashes'])).toEqual(
-      '/fancy\\/paths/with\\\\slashes',
+    expect(encodePathMapNode({ [VALUE]: 0, a: null, b: 0 })).toEqual(':/a!/b:');
+    expect(encodePathMapNode({ [VALUE]: 10, a: null, b: 10 })).toEqual(
+      ':a/a!/b:a',
     );
-    expect(encodePathMapLine(['fancy:pants', 'paths!'])).toEqual(
-      '/fancy\\:pants/paths\\!',
+    expect(encodePathMapNode({ [VALUE]: 1, '': 2, a: 3, b: 4 })).toEqual(
+      ':1/:2/a:3/b:4',
+    );
+    expect(encodePathMapNode({ a: 10, b: 20, c: 30, d: 40 })).toEqual(
+      '/a:a/b:k/c:u/d:14',
+    );
+    expect(
+      encodePathMapNode({ 'fancy/paths': null, 'with\\slashes': null }),
+    ).toEqual('/fancy\\/paths!/with\\\\slashes!');
+    expect(encodePathMapNode({ 'fancy:pants': null, 'paths!': null })).toEqual(
+      '/fancy\\:pants!/paths\\!!',
     );
   });
 
   it('should decode correctly', () => {
-    expect(decodePathMapLine('/fancy\\/paths/with\\\\slashes\n')).toEqual([
-      'fancy/paths',
-      'with\\slashes',
-    ]);
-    expect(decodePathMapLine('\n!\n')).toEqual([]);
-    expect(decodePathMapLine('!\n')).toEqual([null]);
-    expect(() => decodePathMapLine('')).toThrowError();
-    expect(() => decodePathMapLine('bad\n')).toThrowError();
-    expect(decodePathMapLine('/hello/world\n')).toEqual(['hello', 'world']);
-    expect(decodePathMapLine(':4!:5\n')).toEqual([4, null, 5]);
-    expect(decodePathMapLine('/foo:a\n')).toEqual(['foo', 10]);
-    expect(decodePathMapLine(':2i:28:1y:1o\n')).toEqual([90, 80, 70, 60]);
+    expect(decodePathMapNode('/fancy\\/paths!/with\\\\slashes!\n')).toEqual({
+      'fancy/paths': null,
+      'with\\slashes': null,
+    });
+    expect(decodePathMapNode('\n!\n')).toEqual({});
+    expect(decodePathMapNode('!\n')).toEqual({ [VALUE]: null });
+    expect(() => decodePathMapNode('')).toThrowError();
+    expect(() => decodePathMapNode('bad\n')).toThrowError();
+    expect(decodePathMapNode('/hello:1/world:2\n')).toEqual({
+      hello: 1,
+      world: 2,
+    });
+    expect(decodePathMapNode(':4/a!/b:5\n')).toEqual({
+      [VALUE]: 4,
+      a: null,
+      b: 5,
+    });
+    expect(decodePathMapNode('/foo:a\n')).toEqual({ foo: 10 });
+    expect(decodePathMapNode('/0:2i/1:28/2:1y/3:1o\n')).toEqual({
+      0: 90,
+      1: 80,
+      2: 70,
+      3: 60,
+    });
+    expect(decodePathMapNode(':1/:2/a:3\n')).toEqual({
+      [VALUE]: 1,
+      '': 2,
+      a: 3,
+    });
   });
 });
 describe('prefix-trie', () => {
@@ -55,6 +80,7 @@ describe('prefix-trie', () => {
     const writer = new PrefixTrie();
     const input = {
       '/foo': { path: 'foo' },
+      '/foo/': { path: 'foo/' },
       '/foo/bar': true,
       '/foo/baz': false,
       '/foo/zag': null,
@@ -222,10 +248,10 @@ describe('prefix-trie', () => {
     for (const [k, v] of Object.entries(input)) {
       expect(writer.find(k)).toEqual(v);
     }
-    console.log('\nINPUT');
-    console.log(input);
-    console.log('\nOUTPUT');
-    console.log(writer.stringify());
+    // console.log('\nINPUT');
+    // console.log(input);
+    // console.log('\nOUTPUT');
+    // console.log(writer.stringify());
     expect(writer.stringify().length).toBe(770);
     const reader = new PrefixTrieReader(writer.stringify());
     for (const [k, v] of Object.entries(input)) {

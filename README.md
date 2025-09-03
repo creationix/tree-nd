@@ -17,11 +17,11 @@ PathMap is a file format designed for applications that need to store and query 
 
 ## Semantics
 
-This is able to encode a dataset that is a large number of keys (usually URL paths) mapping to many small payloads of arbitrary JSON data.
+This is able to encode a dataset that is a large number of path keys (usually URL or file paths) mapping to many small payloads of arbitrary JSON data.
 
-As an optimization it includes the ability to have default values for all payloads stored once at the top of the file.  Also at the top is a dictionary of shared values that can be referenced from payloads.
+As an optimization it stores `null` payloads with a very compact encoding.  This way the path-map can be a path-set if you only want a compact representation of a set of paths.
 
-In order to save space a bloom filter can be used instead of listing all the paths.  Then paths that are 100% default don't need to be listed in the prefix trie at all, but ensure you can tolerate the false positive rate if you use this option.
+If your use case can tolerate false-positives, the prefix-trie can be configured to skip all keys that have a payload of `null` and instead encode the set of them as a bloom filter with a configurable false-positivice rate *(defaults to `1e-7`)*.
 
 For example, consider this tiny sample dataset that we wish to encode:
 
@@ -33,19 +33,10 @@ For example, consider this tiny sample dataset that we wish to encode:
     config: {
         version: "redirects-v1", // This field is mandatory and must be a string
 
-        // Optional config field to trigger generation of a bloom filter
-        // If `bloom` is used, it must fit this version
-        bloom: {
-            p: 1e-7 // required false positive probability (1-in-10M false positive rate)
-            // `n` is optional and defaults to the number of items in the map
-            // `m` is optional and defaults to the optimal value
-            // `k` is optional and defaults to the optimal value
-            // `s` is optional and defaults to 0 (the seed for the first xxhash64)
-        },
-
-        // Optional config field to trigger generation of prefix trie
-        trie: "/", // if a string, prefixes are split by this string as a delimeter
-        trie: true, // If true, then prefixes are split optimally based on the codepoints present
+        bloom: { // Optional option to generate a bloom filter
+            probability: 1e-7, // false positive probability (1-in-10M false positive rate by default)
+            nullOnly: true, // Only include only entries with `null` payloads in the bloom filter
+        }
 
         // Everything else is arbitrary and defined by the version
         status: 308,
