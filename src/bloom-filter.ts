@@ -1,26 +1,8 @@
-// import { xxh64 } from './xxhash64';
-
-function fnv1a64(bytes: Uint8Array): [number, number] {
-  const FNV_PRIME = 0x100000001b3n; // 64-bit FNV prime
-  const FNV_OFFSET_BASIS = 0xcbf29ce484222325n; // 64-bit FNV offset basis
-
-  let hash = FNV_OFFSET_BASIS;
-
-  for (let i = 0; i < bytes.length; i++) {
-    hash = BigInt.asUintN(64, hash ^ BigInt(bytes[i]));
-    hash = BigInt.asUintN(64, hash * FNV_PRIME);
-  }
-
-  // Split into high and low 32 bits
-  return [Number(hash >> 32n), Number(hash & 0xffffffffn)];
-}
-
 export interface BloomFilterParameters {
   readonly n: number; // Expected number of elements (capacity)
   readonly p: number; // Desired probability of false positives
   readonly m: number; // Bit size of the filter
   readonly k: number; // Optimal number of hashes
-  readonly s: number; // Seed for xxhash64
 }
 
 export class BloomFilter {
@@ -51,22 +33,15 @@ export class BloomFilter {
     if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
       throw new TypeError(`Invalid bloom filter hash count: k=${k}`);
     }
-    // Validate and set the seed (defaults to 0)
-    const s = config.s || 0;
-    if (s < 0 || s > 0x1fffffffffffff) {
-      throw new TypeError(`Invalid bloom filter seed: s=${s}`);
-    }
     // Initialize the config
-    this.config = { n, p, m, k, s };
+    this.config = { n, p, m, k };
     // Initialize the filter as a byte array
     this.filter = new Uint8Array(Math.ceil(m / 8));
   }
 
-  // Use xxhash64 with the seed for the first hash
-  // The second hash uses the second seed
   // The K hashes are calculated by combining the two hashes with double hashing
   *hashIterator(value: string): Generator<[number, number]> {
-    const { s, k, m } = this.config;
+    const { k, m } = this.config;
     const input = new TextEncoder().encode(value);
     const [hash1, hash2] = fnv1a64(input);
     for (let i = 0; i < k; i++) {
@@ -91,4 +66,19 @@ export class BloomFilter {
     }
     return true;
   }
+}
+
+function fnv1a64(bytes: Uint8Array): [number, number] {
+  const FNV_PRIME = 0x100000001b3n; // 64-bit FNV prime
+  const FNV_OFFSET_BASIS = 0xcbf29ce484222325n; // 64-bit FNV offset basis
+
+  let hash = FNV_OFFSET_BASIS;
+
+  for (let i = 0; i < bytes.length; i++) {
+    hash = BigInt.asUintN(64, hash ^ BigInt(bytes[i]));
+    hash = BigInt.asUintN(64, hash * FNV_PRIME);
+  }
+
+  // Split into high and low 32 bits
+  return [Number(hash >> 32n), Number(BigInt.asUintN(32, hash))];
 }
