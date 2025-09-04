@@ -5,7 +5,7 @@ interface TrieNode {
   [VALUE]?: JSONValue;
 }
 
-type JSONValue =
+export type JSONValue =
   | string
   | number
   | boolean
@@ -13,176 +13,12 @@ type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue };
 
-class PathMapNode {
+export class PathMapNode {
   [VALUE]?: null | number;
   [key: string]: null | number;
 }
 
-function isPmapDelimiter(char: string): boolean {
-  return char === '/' || char === ':' || char === '!' || char === '\n';
-}
-
-export function escapeSegment(segment: string): string {
-  return segment.replace(/[\\/:!]/g, (c) => `\\${c}`);
-}
-
-export function unescapeSegment(escapedSegment: string): string {
-  return escapedSegment.replace(/\\(.)/g, (_, c) => c);
-}
-
-export function encodePathMapNode(node: PathMapNode): string {
-  const entries: [string | typeof VALUE, null | number][] =
-    Object.entries(node);
-  const value = node[VALUE];
-  if (value !== undefined) entries.unshift([VALUE, value]);
-  return entries
-    .map(([key, value]) => {
-      return (
-        (key === VALUE ? '' : `/${escapeSegment(key)}`) +
-        (value === null ? '!' : `:${encodeBase36(value)}`)
-      );
-    })
-    .join('');
-}
-
-export function decodePathMapNode(data: string): PathMapNode {
-  if (isPmapDelimiter(data[0]) === false) {
-    throw new Error('Invalid path map line');
-  }
-  let offset = 0;
-  const node = new PathMapNode();
-  const length = data.length;
-  let key: string | typeof VALUE | undefined = VALUE;
-  while (offset < length) {
-    const char = data[offset];
-    if (char === '\n') {
-      offset++;
-      return node;
-    }
-    if (char === '/') {
-      if (typeof key === 'string') {
-        throw new Error('Unexpected key after key');
-      }
-      offset++;
-      const start = offset;
-      while (offset < length) {
-        const c = data[offset];
-        if (isPmapDelimiter(c)) {
-          break;
-        }
-        if (c === '\\') {
-          offset += 2;
-        } else {
-          offset++;
-        }
-      }
-      key = unescapeSegment(data.substring(start, offset));
-    } else if (char === '!') {
-      if (key === undefined) {
-        throw new Error("Missing key before '!'");
-      }
-      node[key] = null;
-      key = undefined;
-      offset++;
-    } else if (char === ':') {
-      if (key === undefined) {
-        throw new Error("Missing key before ':'");
-      }
-      offset++;
-      const start = offset;
-      while (isBase36(data[offset])) {
-        offset++;
-      }
-      node[key] = decodeBase36(data.substring(start, offset));
-      key = undefined;
-    } else {
-      throw new Error(`Unexpected character: ${char}`);
-    }
-  }
-  throw new Error('Unexpected EOF');
-}
-
-function ensurePathMapNode(node: PathMapNode | JSONValue): PathMapNode {
-  if (node instanceof PathMapNode) return node;
-  throw new Error('Unexpected JSON payload');
-}
-
-export class PrefixTrieReader {
-  private rootOffset: number;
-  private data: Uint8Array;
-  private parsedLines: Map<number, PathMapNode | JSONValue>;
-
-  constructor(data: Uint8Array | string) {
-    const bytes =
-      typeof data === 'string' ? new TextEncoder().encode(data) : data;
-    // Find the start of the last line
-    let offset = bytes.length;
-    while (bytes[offset - 1] === 0x0a) {
-      offset--;
-    }
-    while (bytes[offset - 1] !== 0x0a) {
-      offset--;
-    }
-    this.rootOffset = offset;
-    this.data = bytes;
-    this.parsedLines = new Map();
-  }
-
-  find(path: string): JSONValue | undefined {
-    if (path[0] !== '/') {
-      throw new TypeError('Paths must start with /');
-    }
-    const data = this.data;
-    const parsedLines = this.parsedLines;
-
-    let leaf: JSONValue | undefined;
-    let node: PathMapNode | undefined = ensurePathMapNode(
-      getLine(this.rootOffset),
-    );
-    for (const rawPart of path.substring(1).split('/')) {
-      const part = decodeURIComponent(rawPart);
-      const entry = node?.[part];
-      if (entry === undefined) return; // No matching node
-      if (entry === null) {
-        leaf = null;
-        node = undefined;
-      } else {
-        const line = getLine(entry);
-        if (line instanceof PathMapNode) {
-          node = line;
-        } else {
-          leaf = line;
-          node = undefined;
-        }
-      }
-    }
-    if (leaf === undefined && node !== undefined) {
-      const top = node[VALUE];
-      if (top === null) {
-        leaf = null;
-      } else if (typeof top === 'number') {
-        leaf = getLine(top);
-        node = undefined;
-      }
-    }
-    return leaf;
-
-    // Get the line and ending offset with a given start offset
-    function getLine(offset: number) {
-      let cached = parsedLines.get(offset);
-      if (!cached) {
-        const line = getUTF8Line(data, offset);
-        cached = isPmapDelimiter(String.fromCharCode(data[offset]))
-          ? decodePathMapNode(line)
-          : (JSON.parse(line) as JSONValue);
-        parsedLines.set(offset, cached);
-      }
-      return cached;
-    }
-  }
-}
-
-export class PrefixTrie {
+export class PrefixTrieWriter {
   private root: TrieNode;
   constructor() {
     this.root = {};
@@ -285,6 +121,158 @@ export class PrefixTrie {
   }
 }
 
+export function encodePathMapNode(node: PathMapNode): string {
+  const entries: [string | typeof VALUE, null | number][] =
+    Object.entries(node);
+  const value = node[VALUE];
+  if (value !== undefined) entries.unshift([VALUE, value]);
+  return entries
+    .map(([key, value]) => {
+      return (
+        (key === VALUE ? '' : `/${escapeSegment(key)}`) +
+        (value === null ? '!' : `:${encodeBase16(value)}`)
+      );
+    })
+    .join('');
+}
+
+export function decodePathMapNode(data: string): PathMapNode {
+  if (isPmapDelimiter(data[0]) === false) {
+    throw new Error('Invalid path map line');
+  }
+  let offset = 0;
+  const node = new PathMapNode();
+  const length = data.length;
+  let key: string | typeof VALUE | undefined = VALUE;
+  while (offset < length) {
+    const char = data[offset];
+    if (char === '\n') {
+      offset++;
+      return node;
+    }
+    if (char === '/') {
+      if (typeof key === 'string') {
+        throw new Error('Unexpected key after key');
+      }
+      offset++;
+      const start = offset;
+      while (offset < length) {
+        const c = data[offset];
+        if (isPmapDelimiter(c)) {
+          break;
+        }
+        if (c === '\\') {
+          offset += 2;
+        } else {
+          offset++;
+        }
+      }
+      key = unescapeSegment(data.substring(start, offset));
+    } else if (char === '!') {
+      if (key === undefined) {
+        throw new Error("Missing key before '!'");
+      }
+      node[key] = null;
+      key = undefined;
+      offset++;
+    } else if (char === ':') {
+      if (key === undefined) {
+        throw new Error("Missing key before ':'");
+      }
+      offset++;
+      const start = offset;
+      while (isBase16(data[offset])) {
+        offset++;
+      }
+      node[key] = decodeBase16(data.substring(start, offset));
+      key = undefined;
+    } else {
+      throw new Error(`Unexpected character: ${char}`);
+    }
+  }
+  throw new Error('Unexpected EOF');
+}
+
+export class PrefixTrieReader {
+  private rootOffset: number;
+  private data: Uint8Array;
+  private parsedLines: Map<number, PathMapNode | JSONValue>;
+
+  constructor(data: Uint8Array | string) {
+    const bytes =
+      typeof data === 'string' ? new TextEncoder().encode(data) : data;
+    // Find the start of the last line
+    let offset = bytes.length;
+    while (bytes[offset - 1] === 0x0a) {
+      offset--;
+    }
+    while (bytes[offset - 1] !== 0x0a) {
+      offset--;
+    }
+    this.rootOffset = offset;
+    this.data = bytes;
+    this.parsedLines = new Map();
+  }
+
+  find(path: string): JSONValue | undefined {
+    if (path[0] !== '/') {
+      throw new TypeError('Paths must start with /');
+    }
+    const data = this.data;
+    const parsedLines = this.parsedLines;
+
+    let leaf: JSONValue | undefined;
+    let node: PathMapNode | undefined = ensurePathMapNode(
+      getLine(this.rootOffset),
+    );
+    for (const rawPart of path.substring(1).split('/')) {
+      const part = decodeURIComponent(rawPart);
+      const entry = node?.[part];
+      if (entry === undefined) return; // No matching node
+      if (entry === null) {
+        leaf = null;
+        node = undefined;
+      } else {
+        const line = getLine(entry);
+        if (line instanceof PathMapNode) {
+          node = line;
+        } else {
+          leaf = line;
+          node = undefined;
+        }
+      }
+    }
+    if (leaf === undefined && node !== undefined) {
+      const top = node[VALUE];
+      if (top === null) {
+        leaf = null;
+      } else if (typeof top === 'number') {
+        leaf = getLine(top);
+        node = undefined;
+      }
+    }
+    return leaf;
+
+    // Get the line and ending offset with a given start offset
+    function getLine(offset: number) {
+      let cached = parsedLines.get(offset);
+      if (!cached) {
+        const line = getUTF8Line(data, offset);
+        cached = isPmapDelimiter(String.fromCharCode(data[offset]))
+          ? decodePathMapNode(line)
+          : (JSON.parse(line) as JSONValue);
+        parsedLines.set(offset, cached);
+      }
+      return cached;
+    }
+  }
+}
+
+function ensurePathMapNode(node: PathMapNode | JSONValue): PathMapNode {
+  if (node instanceof PathMapNode) return node;
+  throw new Error('Unexpected JSON payload');
+}
+
 function red(str: string): string {
   return `\x1b[31m${str}\x1b[0m`;
 }
@@ -293,6 +281,18 @@ function yellow(str: string): string {
 }
 function green(str: string): string {
   return `\x1b[32m${str}\x1b[0m`;
+}
+
+function isPmapDelimiter(char: string): boolean {
+  return char === '/' || char === ':' || char === '!' || char === '\n';
+}
+
+function escapeSegment(segment: string): string {
+  return segment.replace(/[\\/:!]/g, (c) => `\\${c}`);
+}
+
+function unescapeSegment(escapedSegment: string): string {
+  return escapedSegment.replace(/\\(.)/g, (_, c) => c);
 }
 
 // Get the UTF-8 line from the data at a given offset
@@ -306,17 +306,17 @@ function getUTF8Line(data: Uint8Array, start: number): string {
   return new TextDecoder().decode(data.subarray(start, end));
 }
 
-// Check if a character is a base-36 digit
-function isBase36(char: string): boolean {
-  return (char >= '0' && char <= '9') || (char >= 'a' && char <= 'z');
+// Check if a character is a base-16 digit
+function isBase16(char: string): boolean {
+  return (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f');
 }
 
-// Encode a number using big-endian base-36 digits with empty string for zero
-function encodeBase36(num: number): string {
-  return num === 0 ? '' : num.toString(36);
+// Encode a number using big-endian base-16 digits with empty string for zero
+function encodeBase16(num: number): string {
+  return num === 0 ? '' : num.toString(16);
 }
 
-// Decode a number using big-endian base-36 digits with empty string for zero
-function decodeBase36(num: string): number {
-  return num === '' ? 0 : parseInt(num, 36);
+// Decode a number using big-endian base-16 digits with empty string for zero
+function decodeBase16(num: string): number {
+  return num === '' ? 0 : parseInt(num, 16);
 }

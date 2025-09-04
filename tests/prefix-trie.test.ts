@@ -3,7 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import {
   encodePathMapNode,
   decodePathMapNode,
-  PrefixTrie,
+  PrefixTrieWriter,
   PrefixTrieReader,
   VALUE,
 } from '../src/prefix-trie.ts';
@@ -22,7 +22,7 @@ describe('pathmap-line', () => {
       ':1/:2/a:3/b:4',
     );
     expect(encodePathMapNode({ a: 10, b: 20, c: 30, d: 40 })).toEqual(
-      '/a:a/b:k/c:u/d:14',
+      '/a:a/b:14/c:1e/d:28',
     );
     expect(
       encodePathMapNode({ 'fancy/paths': null, 'with\\slashes': null }),
@@ -51,7 +51,7 @@ describe('pathmap-line', () => {
       b: 5,
     });
     expect(decodePathMapNode('/foo:a\n')).toEqual({ foo: 10 });
-    expect(decodePathMapNode('/0:2i/1:28/2:1y/3:1o\n')).toEqual({
+    expect(decodePathMapNode('/0:5a/1:50/2:46/3:3c\n')).toEqual({
       0: 90,
       1: 80,
       2: 70,
@@ -66,7 +66,7 @@ describe('pathmap-line', () => {
 });
 describe('prefix-trie', () => {
   it('should insert and find values', () => {
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     writer.insert('/foo', { bar: 'baz' });
     expect(writer.find('/foo')).toEqual({ bar: 'baz' });
     expect(writer.find('/')).toBeUndefined();
@@ -77,7 +77,7 @@ describe('prefix-trie', () => {
   });
 
   it('should round-trip basic shapes', () => {
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     const input = {
       '/foo': { path: 'foo' },
       '/foo/': { path: 'foo/' },
@@ -98,7 +98,7 @@ describe('prefix-trie', () => {
   });
 
   it('should round trip all kinds of prefixes', () => {
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     const input = {
       '/': '/',
       '/2': '/',
@@ -142,7 +142,7 @@ describe('prefix-trie', () => {
         path,
       ]),
     );
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     writer.bulkInsert(input);
     // console.log(writer.stringify(true));
     for (const [k, v] of Object.entries(input)) {
@@ -156,7 +156,7 @@ describe('prefix-trie', () => {
   });
 
   it('should round trip realistic data without deduplication', () => {
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     const input = {
       '/women/trousers/yoga-pants/black': 1,
       '/women/trousers/yoga-pants/blue': 2,
@@ -178,7 +178,7 @@ describe('prefix-trie', () => {
   });
 
   it('should round trip realistic data with deduplication', () => {
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     const input = {
       '/women/trousers/yoga-pants/black': 1,
       '/women/trousers/yoga-pants/blue': 2,
@@ -200,7 +200,7 @@ describe('prefix-trie', () => {
   });
 
   it('should round trip realistic data with all null values', () => {
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     const input = {
       '/women/trousers/yoga-pants/black': null,
       '/women/trousers/yoga-pants/blue': null,
@@ -221,7 +221,7 @@ describe('prefix-trie', () => {
   });
 
   it('should use byte offsets with unicode characters', () => {
-    const writer = new PrefixTrie();
+    const writer = new PrefixTrieWriter();
     const input = {
       '/poems/runes': 'ᚠᛇᚻ᛫ᛒᛦᚦ᛫ᚠᚱᚩᚠᚢᚱ᛫ᚠᛁᚱᚪ᛫ᚷᛖᚻᚹᛦᛚᚳᚢᛗ',
       '/poems/middle/english': 'An preost wes on leoden, Laȝamon was ihoten',
@@ -252,7 +252,7 @@ describe('prefix-trie', () => {
     // console.log(input);
     // console.log('\nOUTPUT');
     // console.log(writer.stringify());
-    expect(writer.stringify().length).toBe(770);
+    expect(writer.stringify().length).toBe(786);
     const reader = new PrefixTrieReader(writer.stringify());
     for (const [k, v] of Object.entries(input)) {
       expect(reader.find(k)).toEqual(v);
