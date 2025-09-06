@@ -13,9 +13,11 @@ export type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue };
 
-export class PathMapNode {
-  [VALUE]?: null | number;
-  [key: string]: null | number;
+type PathMapLineLeaf = true | number;
+
+export class PathMapLine {
+  [VALUE]?: PathMapLineLeaf;
+  [key: string]: PathMapLineLeaf;
 }
 
 export class PrefixTrieWriter {
@@ -84,7 +86,7 @@ export class PrefixTrieWriter {
     }
 
     function pushLeaf(value: JSONValue, path?: string) {
-      if (value === null) return null;
+      if (value === true) return true;
       const line = JSON.stringify(value);
       if (debug && seenLines[line] === undefined) {
         push(green(`LEAF: ${path}`));
@@ -93,7 +95,7 @@ export class PrefixTrieWriter {
     }
 
     function walkNode(trieNode: TrieNode, path?: string): number {
-      const node = new PathMapNode();
+      const node = new PathMapLine();
       // If the node is both a leaf and a node, write the leaf first
       const leaf = trieNode[VALUE];
       if (leaf !== undefined) {
@@ -121,82 +123,45 @@ export class PrefixTrieWriter {
   }
 }
 
-export function encodePathMapNode(node: PathMapNode): string {
-  const entries: [string | typeof VALUE, null | number][] =
-    Object.entries(node);
-  const value = node[VALUE];
+export function encodePathMapNode(line: PathMapLine): string {
+  const entries: [string | typeof VALUE, PathMapLineLeaf][] =
+    Object.entries(line);
+  const value = line[VALUE];
   if (value !== undefined) entries.unshift([VALUE, value]);
   return entries
     .map(([key, value]) => {
       return (
         (key === VALUE ? '' : `/${escapeSegment(key)}`) +
-        (value === null ? '!' : `:${encodeBase16(value)}`)
+        (value === true ? '!' : `:${encodeBase16(value)}`)
       );
     })
     .join('');
 }
 
-export function decodePathMapNode(data: string): PathMapNode {
+export function decodePathMapNode(data: string): PathMapLine {
   if (isPmapDelimiter(data[0]) === false) {
     throw new Error('Invalid path map line');
   }
-  let offset = 0;
-  const node = new PathMapNode();
-  const length = data.length;
-  let key: string | typeof VALUE | undefined = VALUE;
-  while (offset < length) {
-    const char = data[offset];
-    if (char === '\n') {
-      offset++;
-      return node;
-    }
-    if (char === '/') {
-      if (typeof key === 'string') {
-        throw new Error('Unexpected key after key');
-      }
-      offset++;
-      const start = offset;
-      while (offset < length) {
-        const c = data[offset];
-        if (isPmapDelimiter(c)) {
-          break;
-        }
-        if (c === '\\') {
-          offset += 2;
-        } else {
-          offset++;
-        }
-      }
-      key = unescapeSegment(data.substring(start, offset));
-    } else if (char === '!') {
-      if (key === undefined) {
-        throw new Error("Missing key before '!'");
-      }
-      node[key] = null;
-      key = undefined;
-      offset++;
-    } else if (char === ':') {
-      if (key === undefined) {
-        throw new Error("Missing key before ':'");
-      }
-      offset++;
-      const start = offset;
-      while (isBase16(data[offset])) {
-        offset++;
-      }
-      node[key] = decodeBase16(data.substring(start, offset));
-      key = undefined;
-    } else {
-      throw new Error(`Unexpected character: ${char}`);
+  const line = new PathMapLine();
+  let key: string | typeof VALUE = VALUE;
+  const parts = data.split(/((?:\\[/:!]|[^/:!\n])*)/g);
+  for (let i = 0, l = parts.length; i < l; i += 2) {
+    const typ = parts[i];
+    const val = parts[i + 1];
+    if (typ === '\n') break;
+    if (typ === '/') {
+      key = val.replace(/\\(.)/g, '$1');
+    } else if (typ === ':' || typ === '!') {
+      line[key] = (typ === '!' && true) || parseInt(val, 16) || 0;
     }
   }
-  throw new Error('Unexpected EOF');
+  return line;
 }
 
 export class PrefixTrieReader {
   private rootOffset: number;
   private data: Uint8Array;
-  private parsedLines: Map<number, PathMapNode | JSONValue>;
+  private parsedLines: Map<number, PathMapLine | JSONValue>;
 
   constructor(data: Uint8Array | string) {
     const bytes =
@@ -222,19 +187,19 @@ export class PrefixTrieReader {
     const parsedLines = this.parsedLines;
 
     let leaf: JSONValue | undefined;
-    let node: PathMapNode | undefined = ensurePathMapNode(
+    let node: PathMapLine | undefined = ensurePathMapNode(
       getLine(this.rootOffset),
     );
     for (const rawPart of path.substring(1).split('/')) {
       const part = decodeURIComponent(rawPart);
       const entry = node?.[part];
       if (entry === undefined) return; // No matching node
-      if (entry === null) {
-        leaf = null;
+      if (entry === true) {
+        leaf = true;
         node = undefined;
       } else {
         const line = getLine(entry);
-        if (line instanceof PathMapNode) {
+        if (line instanceof PathMapLine) {
           node = line;
         } else {
           leaf = line;
@@ -244,8 +209,8 @@ export class PrefixTrieReader {
     }
     if (leaf === undefined && node !== undefined) {
       const top = node[VALUE];
-      if (top === null) {
-        leaf = null;
+      if (top === true) {
+        leaf = true;
       } else if (typeof top === 'number') {
         leaf = getLine(top);
         node = undefined;
@@ -268,8 +233,8 @@ export class PrefixTrieReader {
   }
 }
 
-function ensurePathMapNode(node: PathMapNode | JSONValue): PathMapNode {
-  if (node instanceof PathMapNode) return node;
+function ensurePathMapNode(node: PathMapLine | JSONValue): PathMapLine {
+  if (node instanceof PathMapLine) return node;
   throw new Error('Unexpected JSON payload');
 }
 

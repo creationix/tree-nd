@@ -11,11 +11,11 @@ import {
 describe('pathmap-line', () => {
   it('should encode correctly', () => {
     expect(encodePathMapNode({})).toEqual('');
-    expect(encodePathMapNode({ hello: null, world: null })).toEqual(
+    expect(encodePathMapNode({ hello: true, world: true })).toEqual(
       '/hello!/world!',
     );
-    expect(encodePathMapNode({ [VALUE]: 0, a: null, b: 0 })).toEqual(':/a!/b:');
-    expect(encodePathMapNode({ [VALUE]: 10, a: null, b: 10 })).toEqual(
+    expect(encodePathMapNode({ [VALUE]: 0, a: true, b: 0 })).toEqual(':/a!/b:');
+    expect(encodePathMapNode({ [VALUE]: 10, a: true, b: 10 })).toEqual(
       ':a/a!/b:a',
     );
     expect(encodePathMapNode({ [VALUE]: 1, '': 2, a: 3, b: 4 })).toEqual(
@@ -25,20 +25,20 @@ describe('pathmap-line', () => {
       '/a:a/b:14/c:1e/d:28',
     );
     expect(
-      encodePathMapNode({ 'fancy/paths': null, 'with\\slashes': null }),
+      encodePathMapNode({ 'fancy/paths': true, 'with\\slashes': true }),
     ).toEqual('/fancy\\/paths!/with\\\\slashes!');
-    expect(encodePathMapNode({ 'fancy:pants': null, 'paths!': null })).toEqual(
+    expect(encodePathMapNode({ 'fancy:pants': true, 'paths!': true })).toEqual(
       '/fancy\\:pants!/paths\\!!',
     );
   });
 
   it('should decode correctly', () => {
     expect(decodePathMapNode('/fancy\\/paths!/with\\\\slashes!\n')).toEqual({
-      'fancy/paths': null,
-      'with\\slashes': null,
+      'fancy/paths': true,
+      'with\\slashes': true,
     });
     expect(decodePathMapNode('\n!\n')).toEqual({});
-    expect(decodePathMapNode('!\n')).toEqual({ [VALUE]: null });
+    expect(decodePathMapNode('!\n')).toEqual({ [VALUE]: true });
     expect(() => decodePathMapNode('')).toThrowError();
     expect(() => decodePathMapNode('bad\n')).toThrowError();
     expect(decodePathMapNode('/hello:1/world:2\n')).toEqual({
@@ -47,7 +47,7 @@ describe('pathmap-line', () => {
     });
     expect(decodePathMapNode(':4/a!/b:5\n')).toEqual({
       [VALUE]: 4,
-      a: null,
+      a: true,
       b: 5,
     });
     expect(decodePathMapNode('/foo:a\n')).toEqual({ foo: 10 });
@@ -65,6 +65,27 @@ describe('pathmap-line', () => {
   });
 });
 describe('prefix-trie', () => {
+  it('should encode correctly', () => {
+    const writer = new PrefixTrieWriter();
+    writer.insert('/foo', 'f');
+    expect(writer.stringify()).toEqual('"f"\n/foo:\n');
+    writer.insert('/foo/bar', 'b');
+    expect(writer.stringify()).toEqual('"f"\n"b"\n:/bar:4\n/foo:8\n');
+    writer.insert('/foo/', '/');
+    expect(writer.stringify()).toEqual('"f"\n"/"\n"b"\n:/:4/bar:8\n/foo:c\n');
+  });
+  it('should decode correctly', () => {
+    let reader = new PrefixTrieReader('"f"\n/foo:\n');
+    expect(reader.find('/foo')).toEqual('f');
+    reader = new PrefixTrieReader('"f"\n"b"\n:/bar:4\n/foo:8\n');
+    expect(reader.find('/foo')).toEqual('f');
+    expect(reader.find('/foo/bar')).toEqual('b');
+    reader = new PrefixTrieReader('"f"\n"/"\n"b"\n:/:4/bar:8\n/foo:c\n');
+    expect(reader.find('/foo')).toEqual('f');
+    expect(reader.find('/foo/bar')).toEqual('b');
+    expect(reader.find('/foo/')).toEqual('/');
+  });
+
   it('should insert and find values', () => {
     const writer = new PrefixTrieWriter();
     writer.insert('/foo', { bar: 'baz' });
