@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime": {
+    "version": "LuaJIT"
+  },
+  "diagnostics": {
+    "globals": [],
+    "groupFileStatus": {
+      "strict": "Opened",
+      "strong": "Opened"
+    }
+  },
+  "hint": {
+    "enable": false, // Enable for nice inline hints
+    "semicolon": "SameLine",
+    "setType": true,
+    "paramName": "Literal",
+    "await": true,
+    "arrayIndex": "Auto"
+  },
+  "workspace": {
+    "checkThirdParty": true,
+    "library": [
+      "${3rd}/luassert/library"
+    ]
+  }
+}
