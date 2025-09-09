@@ -1,0 +1,16 @@
+{
+  "/hats": true,
+  "/hats/cowboy": true,
+  "/hats/cowboy/large": true,
+  "/hats/cowboy/small": true,
+  "/hats/beanie/large": true,
+  "/hats/beanie/small": true,
+  "/shirts": true,
+  "/shirts/tshirt": true,
+  "/shirts/tshirt/large": true,
+  "/shirts/tshirt/small": true,
+  "/shirts/polo": true,
+  "/shirts/polo/large": true,
+  "/shirts/polo/medium": true,
+  "/shirts/polo/small": true
+}

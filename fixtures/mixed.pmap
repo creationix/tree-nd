@@ -1,0 +1,15 @@
+null
+123
+"hello"
+[1,2,3]
+/:5/c:9/d:11
+{"foo":"bar"}
+false
+/:34
+[true,null,3.14]
+:26/y:3a/z:3f
+:/b:19/x:50
+{"nested":{"value":42}}
+/:6a
+!/:34/c:82
+/!/a:5e/b:87

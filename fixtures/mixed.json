@@ -1,0 +1,27 @@
+{
+  "/": true,
+  "/a": null,
+  "/a/b/": 123,
+  "/a/b/c": "hello",
+  "/a/b/d": [
+    1,
+    2,
+    3
+  ],
+  "/a/x": {
+    "foo": "bar"
+  },
+  "/a/x/y/": false,
+  "/a/x/z": [
+    true,
+    null,
+    3.14
+  ],
+  "/b": true,
+  "/b/": false,
+  "/b/c/": {
+    "nested": {
+      "value": 42
+    }
+  }
+}

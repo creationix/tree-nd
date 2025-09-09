@@ -1,0 +1,10 @@
+{
+  "": true,
+  "/": true,
+  "/a": true,
+  "/aa": true,
+  "/aa/": true,
+  "/aa/b": true,
+  "/aa/bb": true,
+  "/aa/bb/": true
+}

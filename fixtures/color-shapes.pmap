@@ -1,0 +1,9 @@
+{"color":true}
+{"color":"bright"}
+{"color":"dark"}
+:/bright:f/dark:22
+{"shape":true}
+{"size":"large"}
+{"size":"small"}
+:46/large:55/small:66
+/blue:33/circle:77/green:/red:33/square:77/triangle:46

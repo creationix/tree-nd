@@ -1,0 +1,44 @@
+{
+  "/red": {
+    "color": true
+  },
+  "/blue": {
+    "color": true
+  },
+  "/green": {
+    "color": true
+  },
+  "/red/bright": {
+    "color": "bright"
+  },
+  "/red/dark": {
+    "color": "dark"
+  },
+  "/blue/bright": {
+    "color": "bright"
+  },
+  "/blue/dark": {
+    "color": "dark"
+  },
+  "/square": {
+    "shape": true
+  },
+  "/circle": {
+    "shape": true
+  },
+  "/triangle": {
+    "shape": true
+  },
+  "/square/large": {
+    "size": "large"
+  },
+  "/square/small": {
+    "size": "small"
+  },
+  "/circle/large": {
+    "size": "large"
+  },
+  "/circle/small": {
+    "size": "small"
+  }
+}
